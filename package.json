@@ -1,0 +1,32 @@
+{
+  "name": "qtt-ts",
+  "version": "0.1.0",
+  "description": "An implementation of Quantitative Type Theory in TypeScript",
+  "main": "build/src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "runindex": "npm run build && node build/src/index",
+    "onlyindex": "node build/src/index",
+    "main": "npm run build && node build/src/main",
+    "cli": "npm run build && node build/src/cli",
+    "bundle": "npm run build && browserify build/src/web.js -o bundle.js",
+    "start": "node build/src/cli"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atennapel/qtt-ts.git"
+  },
+  "author": "Albert ten Napel",
+  "email": "aptennap@gmail.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/atennapel/qtt-ts/issues"
+  },
+  "homepage": "https://github.com/atennapelqtt-ts#readme",
+  "devDependencies": {
+    "@types/node": "^14.14.10",
+    "browserify": "^17.0.0",
+    "typescript": "^4.1.2"
+  }
+}
