@@ -1,4 +1,5 @@
 import { Ix, Name } from './names';
+import { Usage } from './usage';
 
 /*
 u ::= 0 | 1 | *
@@ -11,7 +12,6 @@ t ::=
   t t                 -- application
   let u x : t = t; t  -- let
 */
-export type Usage = '0' | '1' | '*';
 export type Term = Type | Var | Pi | Abs | App | Let;
 
 export interface Type { readonly tag: 'Type' }

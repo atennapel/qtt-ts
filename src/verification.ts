@@ -1,11 +1,12 @@
 import { log } from './config';
-import { Usage, Pi, Term, show } from './core';
+import { Pi, Term, show } from './core';
 import { Ix } from './names';
 import { Cons, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar } from './values';
 import * as V from './values';
 import { conv } from './conversion';
+import { multiply, SubUsage, Usage } from './usage';
 
 export type EntryT = { type: Val, usage: Usage };
 export const EntryT = (type: Val, usage: Usage): EntryT => ({ type, usage });
@@ -24,7 +25,6 @@ const indexT = (ts: EnvT, ix: Ix): [EntryT, Ix] | null => {
   return null;
 };
 
-export type SubUsage = '0' | '1';
 export interface Local {
   usage: SubUsage;
   level: Lvl;
@@ -67,14 +67,14 @@ const synth = (local: Local, tm: Term): Val => {
   if (tm.tag === 'Abs') {
     check(inErased(local), tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
-    const rty = synth(localExtend(local, ty, tm.usage), tm.body);
+    const rty = synth(localExtend(local, ty, multiply(tm.usage, local.usage)), tm.body);
     const pi = evaluate(Pi(tm.usage, tm.name, tm.type, quote(rty, local.level + 1)), local.vs);
     return pi;
   }
   if (tm.tag === 'Pi') {
     check(inErased(local), tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
-    check(localExtend(localUsage(local, '0'), ty, tm.usage), tm.body, VType);
+    check(localExtend(localUsage(local, '0'), ty, '0'), tm.body, VType);
     return VType;
   }
   if (tm.tag === 'Let') {
@@ -92,8 +92,9 @@ const synthapp = (local: Local, ty: Val, arg: Term): Val => {
   log(() => `synthapp ${showVal(local, ty)} @ ${show(arg)}`);
   if (ty.tag === 'VPi') {
     const cty = ty.type;
-    check(local, arg, cty);
-    const v = evaluate(arg, local.vs);
+    const newlocal = local.usage === '0' || ty.usage === '0' ? inErased(local) : local;
+    check(newlocal, arg, cty);
+    const v = evaluate(arg, newlocal.vs);
     return vinst(ty, v);
   }
   return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @ ${show(arg)}`);

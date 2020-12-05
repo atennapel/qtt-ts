@@ -3,7 +3,7 @@ import { elaborate } from './elaboration';
 import { parse } from './parser';
 import { Let, show, showCore, Term, Var } from './surface';
 import * as C from './core';
-import { Usage } from './core';
+import { Usage } from './usage';
 import { evaluate, normalize } from './values';
 import { Name } from './names';
 import { verify } from './verification';

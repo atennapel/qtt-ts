@@ -1,9 +1,9 @@
 import { chooseName, Name } from './names';
 import * as C from './core';
-import { Usage } from './core';
 import { Cons, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
+import { Usage } from './usage';
 
 export type Term = Type | Var | Pi | Abs | App | Let;
 

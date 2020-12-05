@@ -2,7 +2,7 @@ import { serr } from './utils/utils';
 import { Term, Var, App, Abs, Pi, Let, Type, show } from './surface';
 import { Name } from './names';
 import { log } from './config';
-import { Usage } from './core';
+import { Usage } from './usage';
 
 type BracketO = '(' | '{'
 type Bracket = BracketO | ')' | '}';

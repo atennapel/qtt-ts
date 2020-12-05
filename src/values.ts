@@ -1,8 +1,9 @@
-import { Usage, Abs, App, Pi, Term, Type, Var } from './core';
+import { Abs, App, Pi, Term, Type, Var } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
+import { Usage } from './usage';
 
 export type Lvl = number;
 

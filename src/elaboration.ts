@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Usage, Abs, App, Let, Pi, Term, Type, Var } from './core';
+import { Abs, App, Let, Pi, Term, Type, Var } from './core';
 import { Ix, Name } from './names';
 import { Cons, indexOf, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
@@ -7,6 +7,7 @@ import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
+import { multiply, SubUsage, Usage } from './usage';
 
 export type EntryT = { type: Val, usage: Usage };
 export const EntryT = (type: Val, usage: Usage): EntryT => ({ type, usage });
@@ -25,7 +26,6 @@ const indexT = (ts: EnvT, ix: Ix): [EntryT, Ix] | null => {
   return null;
 };
 
-export type SubUsage = '0' | '1';
 export interface Local {
   usage: SubUsage;
   level: Lvl;
@@ -49,7 +49,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
     const v = VVar(local.level);
     const x = tm.name;
-    const body = check(localExtend(local, x, ty.type, ty.usage, v), tm.body, vinst(ty, v));
+    const body = check(localExtend(local, x, ty.type, multiply(ty.usage, local.usage), v), tm.body, vinst(ty, v));
     return Abs(ty.usage, x, quote(ty.type, local.level), body);
   }
   if (tm.tag === 'Let') {
@@ -97,7 +97,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     if (tm.type) {
       const type = check(inErased(local), tm.type, VType);
       const ty = evaluate(type, local.vs);
-      const [body, rty] = synth(localExtend(local, tm.name, ty, tm.usage), tm.body);
+      const [body, rty] = synth(localExtend(local, tm.name, ty, multiply(tm.usage, local.usage)), tm.body);
       const pi = evaluate(Pi(tm.usage, tm.name, type, quote(rty, local.level + 1)), local.vs);
       return [Abs(tm.usage, tm.name, type, body), pi];
     } else terr(`cannot synth unannotated lambda: ${show(tm)}`);
@@ -105,7 +105,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   if (tm.tag === 'Pi') {
     const type = check(inErased(local), tm.type, VType);
     const ty = evaluate(type, local.vs);
-    const body = check(localExtend(inErased(local), tm.name, ty, tm.usage), tm.body, VType);
+    const body = check(localExtend(inErased(local), tm.name, ty, '0'), tm.body, VType);
     return [Pi(tm.usage, tm.name, type, body), VType];
   }
   if (tm.tag === 'Let') {
@@ -131,8 +131,9 @@ const synthapp = (local: Local, ty: Val, arg: S.Term): [Term, Val] => {
   log(() => `synthapp ${showVal(local, ty)} @ ${show(arg)}`);
   if (ty.tag === 'VPi') {
     const cty = ty.type;
-    const term = check(local, arg, cty);
-    const v = evaluate(term, local.vs);
+    const newlocal = local.usage === '0' || ty.usage === '0' ? inErased(local) : local;
+    const term = check(newlocal, arg, cty);
+    const v = evaluate(term, newlocal.vs);
     return [term, vinst(ty, v)];
   }
   return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @ ${show(arg)}`);

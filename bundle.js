@@ -67,7 +67,7 @@ const conv = (k, a, b) => {
 };
 exports.conv = conv;
 
-},{"./config":1,"./utils/list":9,"./utils/utils":10,"./values":11}],3:[function(require,module,exports){
+},{"./config":1,"./utils/list":10,"./utils/utils":11,"./values":12}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
@@ -149,6 +149,7 @@ const values_1 = require("./values");
 const S = require("./surface");
 const surface_1 = require("./surface");
 const conversion_1 = require("./conversion");
+const usage_1 = require("./usage");
 const EntryT = (type, usage) => ({ type, usage });
 exports.EntryT = EntryT;
 const indexT = (ts, ix) => {
@@ -180,7 +181,7 @@ const check = (local, tm, ty) => {
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
         const v = values_1.VVar(local.level);
         const x = tm.name;
-        const body = check(exports.localExtend(local, x, ty.type, ty.usage, v), tm.body, values_1.vinst(ty, v));
+        const body = check(exports.localExtend(local, x, ty.type, usage_1.multiply(ty.usage, local.usage), v), tm.body, values_1.vinst(ty, v));
         return core_1.Abs(ty.usage, x, values_1.quote(ty.type, local.level), body);
     }
     if (tm.tag === 'Let') {
@@ -231,7 +232,7 @@ const synth = (local, tm) => {
         if (tm.type) {
             const type = check(exports.inErased(local), tm.type, values_1.VType);
             const ty = values_1.evaluate(type, local.vs);
-            const [body, rty] = synth(exports.localExtend(local, tm.name, ty, tm.usage), tm.body);
+            const [body, rty] = synth(exports.localExtend(local, tm.name, ty, usage_1.multiply(tm.usage, local.usage)), tm.body);
             const pi = values_1.evaluate(core_1.Pi(tm.usage, tm.name, type, values_1.quote(rty, local.level + 1)), local.vs);
             return [core_1.Abs(tm.usage, tm.name, type, body), pi];
         }
@@ -241,7 +242,7 @@ const synth = (local, tm) => {
     if (tm.tag === 'Pi') {
         const type = check(exports.inErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const body = check(exports.localExtend(exports.inErased(local), tm.name, ty, tm.usage), tm.body, values_1.VType);
+        const body = check(exports.localExtend(exports.inErased(local), tm.name, ty, '0'), tm.body, values_1.VType);
         return [core_1.Pi(tm.usage, tm.name, type, body), values_1.VType];
     }
     if (tm.tag === 'Let') {
@@ -267,8 +268,9 @@ const synthapp = (local, ty, arg) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @ ${surface_1.show(arg)}`);
     if (ty.tag === 'VPi') {
         const cty = ty.type;
-        const term = check(local, arg, cty);
-        const v = values_1.evaluate(term, local.vs);
+        const newlocal = local.usage === '0' || ty.usage === '0' ? exports.inErased(local) : local;
+        const term = check(newlocal, arg, cty);
+        const v = values_1.evaluate(term, newlocal.vs);
         return [term, values_1.vinst(ty, v)];
     }
     return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @ ${surface_1.show(arg)}`);
@@ -280,7 +282,7 @@ const elaborate = (t, local = exports.localEmpty) => {
 };
 exports.elaborate = elaborate;
 
-},{"./config":1,"./conversion":2,"./core":3,"./surface":8,"./utils/list":9,"./utils/utils":10,"./values":11}],5:[function(require,module,exports){
+},{"./config":1,"./conversion":2,"./core":3,"./surface":8,"./usage":9,"./utils/list":10,"./utils/utils":11,"./values":12}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chooseName = exports.nextName = void 0;
@@ -297,7 +299,7 @@ exports.nextName = nextName;
 const chooseName = (x, ns) => x === '_' ? x : list_1.contains(ns, x) ? exports.chooseName(exports.nextName(x), ns) : x;
 exports.chooseName = chooseName;
 
-},{"./utils/list":9}],6:[function(require,module,exports){
+},{"./utils/list":10}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parse = void 0;
@@ -688,7 +690,7 @@ const parse = (s, fromRepl = false) => {
 };
 exports.parse = parse;
 
-},{"./config":1,"./surface":8,"./utils/utils":10}],7:[function(require,module,exports){
+},{"./config":1,"./surface":8,"./utils/utils":11}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runREPL = exports.initREPL = void 0;
@@ -790,7 +792,7 @@ const runREPL = (s_, cb) => {
 };
 exports.runREPL = runREPL;
 
-},{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":8,"./values":11,"./verification":12}],8:[function(require,module,exports){
+},{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":8,"./values":12,"./verification":13}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
@@ -890,7 +892,32 @@ exports.showCore = showCore;
 const showVal = (v, k = 0, ns = list_1.Nil) => exports.show(exports.fromCore(values_1.quote(v, k), ns));
 exports.showVal = showVal;
 
-},{"./names":5,"./utils/list":9,"./utils/utils":10,"./values":11}],9:[function(require,module,exports){
+},{"./names":5,"./utils/list":10,"./utils/utils":11,"./values":12}],9:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.add = exports.multiply = void 0;
+const multiply = (a, b) => {
+    if (a === '0' || b === '0')
+        return '0';
+    if (a === '1')
+        return b;
+    if (b === '1')
+        return a;
+    return '*';
+};
+exports.multiply = multiply;
+const add = (a, b) => {
+    if (a === '*' || b === '*')
+        return '*';
+    if (a === '0')
+        return b;
+    if (b === '0')
+        return b;
+    return '*';
+};
+exports.add = add;
+
+},{}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.indexOfFn = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.tail = exports.head = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
@@ -1083,7 +1110,7 @@ const last = (l) => {
 };
 exports.last = last;
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.eqArr = exports.mapObj = exports.tryTE = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
@@ -1166,7 +1193,7 @@ const eqArr = (a, b, eq = (x, y) => x === y) => {
 };
 exports.eqArr = eqArr;
 
-},{"fs":14}],11:[function(require,module,exports){
+},{"fs":15}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vapp = exports.vinst = exports.VVar = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EApp = exports.HVar = void 0;
@@ -1240,7 +1267,7 @@ exports.normalize = normalize;
 const show = (v, k) => C.show(exports.quote(v, k));
 exports.show = show;
 
-},{"./core":3,"./utils/list":9,"./utils/utils":10}],12:[function(require,module,exports){
+},{"./core":3,"./utils/list":10,"./utils/utils":11}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verify = exports.inErased = exports.localUsage = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
@@ -1251,6 +1278,7 @@ const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
 const V = require("./values");
 const conversion_1 = require("./conversion");
+const usage_1 = require("./usage");
 const EntryT = (type, usage) => ({ type, usage });
 exports.EntryT = EntryT;
 const indexT = (ts, ix) => {
@@ -1302,14 +1330,14 @@ const synth = (local, tm) => {
     if (tm.tag === 'Abs') {
         check(exports.inErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const rty = synth(exports.localExtend(local, ty, tm.usage), tm.body);
+        const rty = synth(exports.localExtend(local, ty, usage_1.multiply(tm.usage, local.usage)), tm.body);
         const pi = values_1.evaluate(core_1.Pi(tm.usage, tm.name, tm.type, values_1.quote(rty, local.level + 1)), local.vs);
         return pi;
     }
     if (tm.tag === 'Pi') {
         check(exports.inErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(exports.localExtend(exports.localUsage(local, '0'), ty, tm.usage), tm.body, values_1.VType);
+        check(exports.localExtend(exports.localUsage(local, '0'), ty, '0'), tm.body, values_1.VType);
         return values_1.VType;
     }
     if (tm.tag === 'Let') {
@@ -1326,8 +1354,9 @@ const synthapp = (local, ty, arg) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @ ${core_1.show(arg)}`);
     if (ty.tag === 'VPi') {
         const cty = ty.type;
-        check(local, arg, cty);
-        const v = values_1.evaluate(arg, local.vs);
+        const newlocal = local.usage === '0' || ty.usage === '0' ? exports.inErased(local) : local;
+        check(newlocal, arg, cty);
+        const v = values_1.evaluate(arg, newlocal.vs);
         return values_1.vinst(ty, v);
     }
     return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @ ${core_1.show(arg)}`);
@@ -1339,7 +1368,7 @@ const verify = (t, local = exports.localEmpty) => {
 };
 exports.verify = verify;
 
-},{"./config":1,"./conversion":2,"./core":3,"./utils/list":9,"./utils/utils":10,"./values":11}],13:[function(require,module,exports){
+},{"./config":1,"./conversion":2,"./core":3,"./usage":9,"./utils/list":10,"./utils/utils":11,"./values":12}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -1395,6 +1424,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":7}],14:[function(require,module,exports){
+},{"./repl":7}],15:[function(require,module,exports){
 
-},{}]},{},[13]);
+},{}]},{},[14]);
