@@ -44,7 +44,7 @@ const conv = (k, a, b) => {
     config_1.log(() => `conv(${k}): ${values_1.show(a, k)} ~ ${values_1.show(b, k)}`);
     if (a === b)
         return;
-    if (a.tag === 'VPi' && b.tag === 'VPi') {
+    if (a.tag === 'VPi' && b.tag === 'VPi' && a.usage === b.usage) {
         exports.conv(k, a.type, b.type);
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
@@ -74,19 +74,19 @@ exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exp
 exports.Type = { tag: 'Type' };
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
-const Pi = (name, type, body) => ({ tag: 'Pi', name, type, body });
+const Pi = (usage, name, type, body) => ({ tag: 'Pi', usage, name, type, body });
 exports.Pi = Pi;
-const Abs = (name, type, body) => ({ tag: 'Abs', name, type, body });
+const Abs = (usage, name, type, body) => ({ tag: 'Abs', usage, name, type, body });
 exports.Abs = Abs;
 const App = (fn, arg) => ({ tag: 'App', fn, arg });
 exports.App = App;
-const Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body });
+const Let = (usage, name, type, val, body) => ({ tag: 'Let', usage, name, type, val, body });
 exports.Let = Let;
 const flattenPi = (t) => {
     const params = [];
     let c = t;
     while (c.tag === 'Pi') {
-        params.push([c.name, c.type]);
+        params.push([c.usage, c.name, c.type]);
         c = c.body;
     }
     return [params, c];
@@ -96,7 +96,7 @@ const flattenAbs = (t) => {
     const params = [];
     let c = t;
     while (c.tag === 'Abs') {
-        params.push([c.name, c.type]);
+        params.push([c.usage, c.name, c.type]);
         c = c.body;
     }
     return [params, c];
@@ -121,18 +121,18 @@ const show = (t) => {
         return 'Type';
     if (t.tag === 'Pi') {
         const [params, ret] = exports.flattenPi(t);
-        return `${params.map(([x, t]) => x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${x} : ${exports.show(t)})`).join(' -> ')} -> ${exports.show(ret)}`;
+        return `${params.map(([u, x, t]) => u === '*' && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === '*' ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' -> ')} -> ${exports.show(ret)}`;
     }
     if (t.tag === 'Abs') {
         const [params, body] = exports.flattenAbs(t);
-        return `\\${params.map(([x, t]) => `(${x} : ${exports.show(t)})`).join(' ')}. ${exports.show(body)}`;
+        return `\\${params.map(([u, x, t]) => `(${u === '*' ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' ')}. ${exports.show(body)}`;
     }
     if (t.tag === 'App') {
         const [fn, args] = exports.flattenApp(t);
         return `${showP(!isSimple(fn), fn)} ${args.map(t => showP(!isSimple(t), t)).join(' ')}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.name} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
+        return `let ${t.usage === '*' ? '' : `${t.usage} `}${t.name} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
     return t;
 };
 exports.show = show;
@@ -140,7 +140,7 @@ exports.show = show;
 },{}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.elaborate = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
+exports.elaborate = exports.inErased = exports.localUsage = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
 const config_1 = require("./config");
 const core_1 = require("./core");
 const list_1 = require("./utils/list");
@@ -149,7 +149,7 @@ const values_1 = require("./values");
 const S = require("./surface");
 const surface_1 = require("./surface");
 const conversion_1 = require("./conversion");
-const EntryT = (type) => ({ type });
+const EntryT = (type, usage) => ({ type, usage });
 exports.EntryT = EntryT;
 const indexT = (ts, ix) => {
     let l = ts;
@@ -163,11 +163,15 @@ const indexT = (ts, ix) => {
     }
     return null;
 };
-const Local = (level, ns, ts, vs) => ({ level, ns, ts, vs });
+const Local = (usage, level, ns, ts, vs) => ({ usage, level, ns, ts, vs });
 exports.Local = Local;
-exports.localEmpty = exports.Local(0, list_1.Nil, list_1.Nil, list_1.Nil);
-const localExtend = (local, name, ty, val = values_1.VVar(local.level)) => exports.Local(local.level + 1, list_1.Cons(name, local.ns), list_1.Cons(exports.EntryT(ty), local.ts), list_1.Cons(val, local.vs));
+exports.localEmpty = exports.Local('1', 0, list_1.Nil, list_1.Nil, list_1.Nil);
+const localExtend = (local, name, ty, usage, val = values_1.VVar(local.level)) => exports.Local(local.usage, local.level + 1, list_1.Cons(name, local.ns), list_1.Cons(exports.EntryT(ty, usage), local.ts), list_1.Cons(val, local.vs));
 exports.localExtend = localExtend;
+const localUsage = (local, usage) => exports.Local(usage, local.level, local.ns, local.ts, local.vs);
+exports.localUsage = localUsage;
+const inErased = (local) => exports.localUsage(local, '0');
+exports.inErased = inErased;
 const showVal = (local, val) => S.showVal(val, local.level, local.ns);
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
@@ -176,15 +180,15 @@ const check = (local, tm, ty) => {
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
         const v = values_1.VVar(local.level);
         const x = tm.name;
-        const body = check(exports.localExtend(local, x, ty.type, v), tm.body, values_1.vinst(ty, v));
-        return core_1.Abs(x, values_1.quote(ty.type, local.level), body);
+        const body = check(exports.localExtend(local, x, ty.type, ty.usage, v), tm.body, values_1.vinst(ty, v));
+        return core_1.Abs(ty.usage, x, values_1.quote(ty.type, local.level), body);
     }
     if (tm.tag === 'Let') {
         let vtype;
         let vty;
         let val;
         if (tm.type) {
-            vtype = check(local, tm.type, values_1.VType);
+            vtype = check(exports.inErased(local), tm.type, values_1.VType);
             vty = values_1.evaluate(vtype, local.vs);
             val = check(local, tm.val, ty);
         }
@@ -193,8 +197,8 @@ const check = (local, tm, ty) => {
             vtype = values_1.quote(vty, local.level);
         }
         const v = values_1.evaluate(val, local.vs);
-        const body = check(exports.localExtend(local, tm.name, vty, v), tm.body, ty);
-        return core_1.Let(tm.name, vtype, val, body);
+        const body = check(exports.localExtend(local, tm.name, vty, tm.usage, v), tm.body, ty);
+        return core_1.Let(tm.usage, tm.name, vtype, val, body);
     }
     const [term, ty2] = synth(local, tm);
     return utils_1.tryT(() => {
@@ -213,6 +217,8 @@ const synth = (local, tm) => {
             return utils_1.terr(`undefined var ${tm.name}`);
         else {
             const [entry, j] = indexT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
+            if (local.usage === '1' && entry.usage === '0')
+                return utils_1.terr(`used erased variable: ${surface_1.show(tm)}`);
             return [core_1.Var(j), entry.type];
         }
     }
@@ -223,27 +229,27 @@ const synth = (local, tm) => {
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
-            const type = check(local, tm.type, values_1.VType);
+            const type = check(exports.inErased(local), tm.type, values_1.VType);
             const ty = values_1.evaluate(type, local.vs);
-            const [body, rty] = synth(exports.localExtend(local, tm.name, ty), tm.body);
-            const pi = values_1.evaluate(core_1.Pi(tm.name, type, values_1.quote(rty, local.level + 1)), local.vs);
-            return [core_1.Abs(tm.name, type, body), pi];
+            const [body, rty] = synth(exports.localExtend(local, tm.name, ty, tm.usage), tm.body);
+            const pi = values_1.evaluate(core_1.Pi(tm.usage, tm.name, type, values_1.quote(rty, local.level + 1)), local.vs);
+            return [core_1.Abs(tm.usage, tm.name, type, body), pi];
         }
         else
             utils_1.terr(`cannot synth unannotated lambda: ${surface_1.show(tm)}`);
     }
     if (tm.tag === 'Pi') {
-        const type = check(local, tm.type, values_1.VType);
+        const type = check(exports.inErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const body = check(exports.localExtend(local, tm.name, ty), tm.body, values_1.VType);
-        return [core_1.Pi(tm.name, type, body), values_1.VType];
+        const body = check(exports.localExtend(exports.inErased(local), tm.name, ty, tm.usage), tm.body, values_1.VType);
+        return [core_1.Pi(tm.usage, tm.name, type, body), values_1.VType];
     }
     if (tm.tag === 'Let') {
         let type;
         let ty;
         let val;
         if (tm.type) {
-            type = check(local, tm.type, values_1.VType);
+            type = check(exports.inErased(local), tm.type, values_1.VType);
             ty = values_1.evaluate(type, local.vs);
             val = check(local, tm.val, ty);
         }
@@ -252,8 +258,8 @@ const synth = (local, tm) => {
             type = values_1.quote(ty, local.level);
         }
         const v = values_1.evaluate(val, local.vs);
-        const [body, rty] = synth(exports.localExtend(local, tm.name, ty, v), tm.body);
-        return [core_1.Let(tm.name, type, val, body), rty];
+        const [body, rty] = synth(exports.localExtend(local, tm.name, ty, tm.usage, v), tm.body);
+        return [core_1.Let(tm.usage, tm.name, type, val, body), rty];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
@@ -427,37 +433,55 @@ const splitTokens = (a, fn, keepSymbol = false) => {
 };
 const lambdaParams = (t, fromRepl) => {
     if (t.tag === 'Name')
-        return [[t.name, false, null]];
+        return [['*', t.name, false, null]];
     if (t.tag === 'List') {
         const impl = t.bracket === '{';
         const a = t.list;
         if (a.length === 0)
-            return [['_', impl, tunit]];
+            return [['*', '_', impl, tunit]];
         const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
         if (i === -1)
-            return isNames(a).map(x => [x, impl, null]);
-        const ns = a.slice(0, i);
+            return isNames(a).map(x => ['*', x, impl, null]);
+        let start = 0;
+        const n = a[0];
+        let u = '*';
+        if (n.tag === 'Num') {
+            if (n.num !== '0' && n.num !== '1')
+                return utils_1.serr(`invalid usage ${n.num} in lambda`);
+            u = n.num;
+            start = 1;
+        }
+        const ns = a.slice(start, i);
         const rest = a.slice(i + 1);
         const ty = exprs(rest, '(', fromRepl);
-        return isNames(ns).map(x => [x, impl, ty]);
+        return isNames(ns).map(x => [u, x, impl, ty]);
     }
     return utils_1.serr(`invalid lambda param`);
 };
 const piParams = (t, fromRepl) => {
     if (t.tag === 'Name')
-        return [['_', false, expr(t, fromRepl)[0]]];
+        return [['*', '_', false, expr(t, fromRepl)[0]]];
     if (t.tag === 'List') {
         const impl = t.bracket === '{';
         const a = t.list;
         if (a.length === 0)
-            return [['_', impl, tunit]];
+            return [['*', '_', impl, tunit]];
         const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
         if (i === -1)
-            return [['_', impl, expr(t, fromRepl)[0]]];
-        const ns = a.slice(0, i);
+            return [['*', '_', impl, expr(t, fromRepl)[0]]];
+        let start = 0;
+        const n = a[0];
+        let u = '*';
+        if (n.tag === 'Num') {
+            if (n.num !== '0' && n.num !== '1')
+                return utils_1.serr(`invalid usage ${n.num} in pi`);
+            u = n.num;
+            start = 1;
+        }
+        const ns = a.slice(start, i);
         const rest = a.slice(i + 1);
         const ty = exprs(rest, '(', fromRepl);
-        return isNames(ns).map(x => [x, impl, ty]);
+        return isNames(ns).map(x => [u, x, impl, ty]);
     }
     return utils_1.serr(`invalid pi param`);
 };
@@ -543,7 +567,16 @@ const exprs = (ts, br, fromRepl) => {
     if (ts.length === 1)
         return expr(ts[0], fromRepl)[0];
     if (isName(ts[0], 'let')) {
-        const x = ts[1];
+        let x = ts[1];
+        let j = 2;
+        let u = '*';
+        if (x.tag === 'Num') {
+            if (x.num !== '0' && x.num !== '1')
+                return utils_1.serr(`invalid usage ${x.num} in let`);
+            u = x.num;
+            x = ts[2];
+            j = 3;
+        }
         let name = 'ERROR';
         if (x.tag === 'Name') {
             name = x.name;
@@ -560,7 +593,6 @@ const exprs = (ts, br, fromRepl) => {
         else
             return utils_1.serr(`invalid name for let`);
         let ty = null;
-        let j = 2;
         if (isName(ts[j], ':')) {
             const tyts = [];
             j++;
@@ -589,20 +621,19 @@ const exprs = (ts, br, fromRepl) => {
         if (vals.length === 0)
             return utils_1.serr(`empty val in let`);
         const val = exprs(vals, '(', fromRepl);
-        const name2 = name[0] === '-' ? name.slice(1) : name;
         if (!found) {
             if (!fromRepl)
                 return utils_1.serr(`no ; after let`);
-            return surface_1.Let(name2, ty || null, val, null);
+            return surface_1.Let(u, name, ty || null, val, null);
         }
         const body = exprs(ts.slice(i + 1), '(', fromRepl);
-        return surface_1.Let(name2, ty || null, val, body);
+        return surface_1.Let(u, name, ty || null, val, body);
     }
     const i = ts.findIndex(x => isName(x, ':'));
     if (i >= 0) {
         const a = ts.slice(0, i);
         const b = ts.slice(i + 1);
-        return surface_1.Let('x', exprs(b, '(', fromRepl), exprs(a, '(', fromRepl), surface_1.Var('x'));
+        return surface_1.Let('1', 'x', exprs(b, '(', fromRepl), exprs(a, '(', fromRepl), surface_1.Var('x'));
     }
     if (isName(ts[0], '\\')) {
         const args = [];
@@ -619,7 +650,7 @@ const exprs = (ts, br, fromRepl) => {
         if (!found)
             return utils_1.serr(`. not found after \\ or there was no whitespace after .`);
         const body = exprs(ts.slice(i + 1), '(', fromRepl);
-        return args.reduceRight((x, [name, , ty]) => surface_1.Abs(name[0] === '-' ? name.slice(1) : name, ty, x), body);
+        return args.reduceRight((x, [u, name, , ty]) => surface_1.Abs(u, name, ty, x), body);
     }
     const j = ts.findIndex(x => isName(x, '->'));
     if (j >= 0) {
@@ -627,10 +658,10 @@ const exprs = (ts, br, fromRepl) => {
         if (s.length < 2)
             return utils_1.serr(`parsing failed with ->`);
         const args = s.slice(0, -1)
-            .map(p => p.length === 1 ? piParams(p[0], fromRepl) : [['_', false, exprs(p, '(', fromRepl)]])
+            .map(p => p.length === 1 ? piParams(p[0], fromRepl) : [['*', '_', false, exprs(p, '(', fromRepl)]])
             .reduce((x, y) => x.concat(y), []);
         const body = exprs(s[s.length - 1], '(', fromRepl);
-        return args.reduceRight((x, [name, , ty]) => surface_1.Pi(name[0] === '-' ? name.slice(1) : name, ty, x), body);
+        return args.reduceRight((x, [u, name, , ty]) => surface_1.Pi(u, name, ty, x), body);
     }
     const l = ts.findIndex(x => isName(x, '\\'));
     let all = [];
@@ -705,7 +736,7 @@ const runREPL = (s_, cb) => {
             return cb(`showStackTrace: ${showStackTrace}`);
         }
         if (s === ':defs')
-            return cb(defs.map(([x, t, v]) => `let ${x}${t ? ` : ${surface_1.show(t)}` : ''} = ${surface_1.show(v)}`).join('\n'));
+            return cb(defs.map(([u, x, t, v]) => `let ${u === '*' ? '' : `${u} `}${x}${t ? ` : ${surface_1.show(t)}` : ''} = ${surface_1.show(v)}`).join('\n'));
         if (s === ':clear') {
             defs = [];
             elocal = Elab.localEmpty;
@@ -724,7 +755,7 @@ const runREPL = (s_, cb) => {
         let isDef = false;
         if (term.tag === 'Let' && term.body === null) {
             isDef = true;
-            term = surface_1.Let(term.name, term.type, term.val, surface_1.Var(term.name));
+            term = surface_1.Let(term.usage, term.name, term.type, term.val, surface_1.Var(term.name));
         }
         config_1.log(() => surface_1.show(term));
         config_1.log(() => 'ELABORATE');
@@ -745,9 +776,9 @@ const runREPL = (s_, cb) => {
         }
         const etermstr = surface_1.showCore(eterm, elocal.ns);
         if (isDef && term.tag === 'Let') {
-            defs.push([term.name, term.type, term.val]);
-            elocal = Elab.localExtend(elocal, term.name, values_1.evaluate(etype, elocal.vs), values_1.evaluate(eterm, elocal.vs));
-            vlocal = Verif.localExtend(vlocal, values_1.evaluate(verifty, vlocal.vs), values_1.evaluate(eterm, vlocal.vs));
+            defs.push([term.usage, term.name, term.type, term.val]);
+            elocal = Elab.localExtend(elocal, term.name, values_1.evaluate(etype, elocal.vs), term.usage, values_1.evaluate(eterm, elocal.vs));
+            vlocal = Verif.localExtend(vlocal, values_1.evaluate(verifty, vlocal.vs), term.usage, values_1.evaluate(eterm, vlocal.vs));
         }
         return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${etermstr}${normstr}`);
     }
@@ -770,19 +801,19 @@ const values_1 = require("./values");
 exports.Type = { tag: 'Type' };
 const Var = (name) => ({ tag: 'Var', name });
 exports.Var = Var;
-const Pi = (name, type, body) => ({ tag: 'Pi', name, type, body });
+const Pi = (usage, name, type, body) => ({ tag: 'Pi', usage, name, type, body });
 exports.Pi = Pi;
-const Abs = (name, type, body) => ({ tag: 'Abs', name, type, body });
+const Abs = (usage, name, type, body) => ({ tag: 'Abs', usage, name, type, body });
 exports.Abs = Abs;
 const App = (fn, arg) => ({ tag: 'App', fn, arg });
 exports.App = App;
-const Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body });
+const Let = (usage, name, type, val, body) => ({ tag: 'Let', usage, name, type, val, body });
 exports.Let = Let;
 const flattenPi = (t) => {
     const params = [];
     let c = t;
     while (c.tag === 'Pi') {
-        params.push([c.name, c.type]);
+        params.push([c.usage, c.name, c.type]);
         c = c.body;
     }
     return [params, c];
@@ -792,7 +823,7 @@ const flattenAbs = (t) => {
     const params = [];
     let c = t;
     while (c.tag === 'Abs') {
-        params.push([c.name, c.type]);
+        params.push([c.usage, c.name, c.type]);
         c = c.body;
     }
     return [params, c];
@@ -817,18 +848,18 @@ const show = (t) => {
         return 'Type';
     if (t.tag === 'Pi') {
         const [params, ret] = exports.flattenPi(t);
-        return `${params.map(([x, t]) => x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${x} : ${exports.show(t)})`).join(' -> ')} -> ${exports.show(ret)}`;
+        return `${params.map(([u, x, t]) => u === '*' && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === '*' ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' -> ')} -> ${exports.show(ret)}`;
     }
     if (t.tag === 'Abs') {
         const [params, body] = exports.flattenAbs(t);
-        return `\\${params.map(([x, t]) => t ? `(${x} : ${exports.show(t)})` : x).join(' ')}. ${exports.show(body)}`;
+        return `\\${params.map(([u, x, t]) => t ? `(${u === '*' ? '' : `${u} `}${x} : ${exports.show(t)})` : x).join(' ')}. ${exports.show(body)}`;
     }
     if (t.tag === 'App') {
         const [fn, args] = exports.flattenApp(t);
         return `${showP(!isSimple(fn), fn)} ${args.map(t => showP(!isSimple(t), t)).join(' ')}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
+        return `let ${t.usage === '*' ? '' : `${t.usage} `}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
     return t;
 };
 exports.show = show;
@@ -841,15 +872,15 @@ const fromCore = (t, ns = list_1.Nil) => {
         return exports.App(exports.fromCore(t.fn, ns), exports.fromCore(t.arg, ns));
     if (t.tag === 'Pi') {
         const x = names_1.chooseName(t.name, ns);
-        return exports.Pi(x, exports.fromCore(t.type, ns), exports.fromCore(t.body, list_1.Cons(x, ns)));
+        return exports.Pi(t.usage, x, exports.fromCore(t.type, ns), exports.fromCore(t.body, list_1.Cons(x, ns)));
     }
     if (t.tag === 'Abs') {
         const x = names_1.chooseName(t.name, ns);
-        return exports.Abs(x, exports.fromCore(t.type, ns), exports.fromCore(t.body, list_1.Cons(x, ns)));
+        return exports.Abs(t.usage, x, exports.fromCore(t.type, ns), exports.fromCore(t.body, list_1.Cons(x, ns)));
     }
     if (t.tag === 'Let') {
         const x = names_1.chooseName(t.name, ns);
-        return exports.Let(x, exports.fromCore(t.type, ns), exports.fromCore(t.val, ns), exports.fromCore(t.body, list_1.Cons(x, ns)));
+        return exports.Let(t.usage, x, exports.fromCore(t.type, ns), exports.fromCore(t.val, ns), exports.fromCore(t.body, list_1.Cons(x, ns)));
     }
     return t;
 };
@@ -1150,9 +1181,9 @@ exports.EApp = EApp;
 exports.VType = { tag: 'VType' };
 const VNe = (head, spine) => ({ tag: 'VNe', head, spine });
 exports.VNe = VNe;
-const VAbs = (name, type, clos) => ({ tag: 'VAbs', name, type, clos });
+const VAbs = (usage, name, type, clos) => ({ tag: 'VAbs', usage, name, type, clos });
 exports.VAbs = VAbs;
-const VPi = (name, type, clos) => ({ tag: 'VPi', name, type, clos });
+const VPi = (usage, name, type, clos) => ({ tag: 'VPi', usage, name, type, clos });
 exports.VPi = VPi;
 const VVar = (level, spine = list_1.Nil) => exports.VNe(exports.HVar(level), spine);
 exports.VVar = VVar;
@@ -1170,9 +1201,9 @@ const evaluate = (t, vs) => {
     if (t.tag === 'Type')
         return exports.VType;
     if (t.tag === 'Abs')
-        return exports.VAbs(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+        return exports.VAbs(t.usage, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
     if (t.tag === 'Pi')
-        return exports.VPi(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+        return exports.VPi(t.usage, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
     if (t.tag === 'Var')
         return list_1.index(vs, t.index) || utils_1.impossible(`evaluate: var ${t.index} has no value`);
     if (t.tag === 'App')
@@ -1198,9 +1229,9 @@ const quote = (v, k) => {
     if (v.tag === 'VNe')
         return list_1.foldr((x, y) => quoteElim(y, x, k), quoteHead(v.head, k), v.spine);
     if (v.tag === 'VAbs')
-        return core_1.Abs(v.name, exports.quote(v.type, k), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1));
+        return core_1.Abs(v.usage, v.name, exports.quote(v.type, k), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1));
     if (v.tag === 'VPi')
-        return core_1.Pi(v.name, exports.quote(v.type, k), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1));
+        return core_1.Pi(v.usage, v.name, exports.quote(v.type, k), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1));
     return v;
 };
 exports.quote = quote;
@@ -1212,7 +1243,7 @@ exports.show = show;
 },{"./core":3,"./utils/list":9,"./utils/utils":10}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verify = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
+exports.verify = exports.inErased = exports.localUsage = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
 const config_1 = require("./config");
 const core_1 = require("./core");
 const list_1 = require("./utils/list");
@@ -1220,7 +1251,7 @@ const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
 const V = require("./values");
 const conversion_1 = require("./conversion");
-const EntryT = (type) => ({ type });
+const EntryT = (type, usage) => ({ type, usage });
 exports.EntryT = EntryT;
 const indexT = (ts, ix) => {
     let l = ts;
@@ -1234,11 +1265,15 @@ const indexT = (ts, ix) => {
     }
     return null;
 };
-const Local = (level, ts, vs) => ({ level, ts, vs });
+const Local = (usage, level, ts, vs) => ({ usage, level, ts, vs });
 exports.Local = Local;
-exports.localEmpty = exports.Local(0, list_1.Nil, list_1.Nil);
-const localExtend = (local, ty, val = values_1.VVar(local.level)) => exports.Local(local.level + 1, list_1.Cons(exports.EntryT(ty), local.ts), list_1.Cons(val, local.vs));
+exports.localEmpty = exports.Local('1', 0, list_1.Nil, list_1.Nil);
+const localExtend = (local, ty, usage, val = values_1.VVar(local.level)) => exports.Local(local.usage, local.level + 1, list_1.Cons(exports.EntryT(ty, usage), local.ts), list_1.Cons(val, local.vs));
 exports.localExtend = localExtend;
+const localUsage = (local, usage) => exports.Local(usage, local.level, local.ts, local.vs);
+exports.localUsage = localUsage;
+const inErased = (local) => exports.localUsage(local, '0');
+exports.inErased = inErased;
 const showVal = (local, val) => V.show(val, local.level);
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${core_1.show(tm)} : ${showVal(local, ty)}`);
@@ -1255,6 +1290,8 @@ const synth = (local, tm) => {
         return values_1.VType;
     if (tm.tag === 'Var') {
         const [entry] = indexT(local.ts, tm.index) || utils_1.terr(`var out of scope ${core_1.show(tm)}`);
+        if (local.usage === '1' && entry.usage === '0')
+            return utils_1.terr(`used erased variable: ${core_1.show(tm)}`);
         return entry.type;
     }
     if (tm.tag === 'App') {
@@ -1263,24 +1300,24 @@ const synth = (local, tm) => {
         return rty;
     }
     if (tm.tag === 'Abs') {
-        check(local, tm.type, values_1.VType);
+        check(exports.inErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const rty = synth(exports.localExtend(local, ty), tm.body);
-        const pi = values_1.evaluate(core_1.Pi(tm.name, tm.type, values_1.quote(rty, local.level + 1)), local.vs);
+        const rty = synth(exports.localExtend(local, ty, tm.usage), tm.body);
+        const pi = values_1.evaluate(core_1.Pi(tm.usage, tm.name, tm.type, values_1.quote(rty, local.level + 1)), local.vs);
         return pi;
     }
     if (tm.tag === 'Pi') {
-        check(local, tm.type, values_1.VType);
+        check(exports.inErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(exports.localExtend(local, ty), tm.body, values_1.VType);
+        check(exports.localExtend(exports.localUsage(local, '0'), ty, tm.usage), tm.body, values_1.VType);
         return values_1.VType;
     }
     if (tm.tag === 'Let') {
-        check(local, tm.type, values_1.VType);
+        check(exports.inErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
         check(local, tm.val, ty);
         const v = values_1.evaluate(tm.val, local.vs);
-        const rty = synth(exports.localExtend(local, ty, v), tm.body);
+        const rty = synth(exports.localExtend(local, ty, tm.usage, v), tm.body);
         return rty;
     }
     return utils_1.terr(`unable to synth ${core_1.show(tm)}`);

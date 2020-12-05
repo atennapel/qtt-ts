@@ -17,15 +17,17 @@ yarn start example.p
 ```
 
 Notes:
+- this implements the 0, 1, unrestricted (which I denote with *) rig
 - application does not have the usage annotation, these will be infered from the function type
 
 Currently done:
 - basic type theory with dependent functions and type-in-type
+- erasure check
 
 Not yet done:
-- quantitative type theory
+- linear check
 - sigma types
-- erasure
+- erase to untyped lambda calculus
 
 Will not be implemented:
 - implicit arguments/unification

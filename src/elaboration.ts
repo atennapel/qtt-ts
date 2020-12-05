@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Let, Pi, Term, Type, Var } from './core';
+import { Usage, Abs, App, Let, Pi, Term, Type, Var } from './core';
 import { Ix, Name } from './names';
 import { Cons, indexOf, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
@@ -8,8 +8,8 @@ import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
 
-export type EntryT = { type: Val };
-export const EntryT = (type: Val): EntryT => ({ type });
+export type EntryT = { type: Val, usage: Usage };
+export const EntryT = (type: Val, usage: Usage): EntryT => ({ type, usage });
 
 export type EnvT = List<EntryT>;
 
@@ -25,16 +25,21 @@ const indexT = (ts: EnvT, ix: Ix): [EntryT, Ix] | null => {
   return null;
 };
 
+export type SubUsage = '0' | '1';
 export interface Local {
+  usage: SubUsage;
   level: Lvl;
   ns: List<Name>;
   ts: EnvT;
   vs: EnvV;
 }
-export const Local = (level: Ix, ns: List<Name>, ts: EnvT, vs: EnvV): Local => ({ level, ns, ts, vs });
-export const localEmpty: Local = Local(0, Nil, Nil, Nil);
-export const localExtend = (local: Local, name: Name, ty: Val, val: Val = VVar(local.level)): Local =>
-  Local(local.level + 1, Cons(name, local.ns), Cons(EntryT(ty), local.ts), Cons(val, local.vs));
+export const Local = (usage: SubUsage, level: Ix, ns: List<Name>, ts: EnvT, vs: EnvV): Local => ({ usage, level, ns, ts, vs });
+export const localEmpty: Local = Local('1', 0, Nil, Nil, Nil);
+export const localExtend = (local: Local, name: Name, ty: Val, usage: Usage, val: Val = VVar(local.level)): Local =>
+  Local(local.usage, local.level + 1, Cons(name, local.ns), Cons(EntryT(ty, usage), local.ts), Cons(val, local.vs));
+export const localUsage = (local: Local, usage: SubUsage): Local =>
+  Local(usage, local.level, local.ns, local.ts, local.vs);
+export const inErased = (local: Local): Local => localUsage(local, '0');
 
 const showVal = (local: Local, val: Val): string => S.showVal(val, local.level, local.ns);
 
@@ -44,15 +49,15 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
     const v = VVar(local.level);
     const x = tm.name;
-    const body = check(localExtend(local, x, ty.type, v), tm.body, vinst(ty, v));
-    return Abs(x, quote(ty.type, local.level), body);
+    const body = check(localExtend(local, x, ty.type, ty.usage, v), tm.body, vinst(ty, v));
+    return Abs(ty.usage, x, quote(ty.type, local.level), body);
   }
   if (tm.tag === 'Let') {
     let vtype: Term;
     let vty: Val;
     let val: Term;
     if (tm.type) {
-      vtype = check(local, tm.type, VType);
+      vtype = check(inErased(local), tm.type, VType);
       vty = evaluate(vtype, local.vs);
       val = check(local, tm.val, ty);
     } else {
@@ -60,8 +65,8 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
       vtype = quote(vty, local.level);
     }
     const v = evaluate(val, local.vs);
-    const body = check(localExtend(local, tm.name, vty, v), tm.body, ty);
-    return Let(tm.name, vtype, val, body);
+    const body = check(localExtend(local, tm.name, vty, tm.usage, v), tm.body, ty);
+    return Let(tm.usage, tm.name, vtype, val, body);
   }
   const [term, ty2] = synth(local, tm);
   return tryT(() => {
@@ -79,6 +84,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     if (i < 0) return terr(`undefined var ${tm.name}`);
     else {
       const [entry, j] = indexT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
+      if (local.usage === '1' && entry.usage === '0') return terr(`used erased variable: ${show(tm)}`)
       return [Var(j), entry.type];
     }
   }
@@ -89,25 +95,25 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   }
   if (tm.tag === 'Abs') {
     if (tm.type) {
-      const type = check(local, tm.type, VType);
+      const type = check(inErased(local), tm.type, VType);
       const ty = evaluate(type, local.vs);
-      const [body, rty] = synth(localExtend(local, tm.name, ty), tm.body);
-      const pi = evaluate(Pi(tm.name, type, quote(rty, local.level + 1)), local.vs);
-      return [Abs(tm.name, type, body), pi];
+      const [body, rty] = synth(localExtend(local, tm.name, ty, tm.usage), tm.body);
+      const pi = evaluate(Pi(tm.usage, tm.name, type, quote(rty, local.level + 1)), local.vs);
+      return [Abs(tm.usage, tm.name, type, body), pi];
     } else terr(`cannot synth unannotated lambda: ${show(tm)}`);
   }
   if (tm.tag === 'Pi') {
-    const type = check(local, tm.type, VType);
+    const type = check(inErased(local), tm.type, VType);
     const ty = evaluate(type, local.vs);
-    const body = check(localExtend(local, tm.name, ty), tm.body, VType);
-    return [Pi(tm.name, type, body), VType];
+    const body = check(localExtend(inErased(local), tm.name, ty, tm.usage), tm.body, VType);
+    return [Pi(tm.usage, tm.name, type, body), VType];
   }
   if (tm.tag === 'Let') {
     let type: Term;
     let ty: Val;
     let val: Term;
     if (tm.type) {
-      type = check(local, tm.type, VType);
+      type = check(inErased(local), tm.type, VType);
       ty = evaluate(type, local.vs);
       val = check(local, tm.val, ty);
     } else {
@@ -115,8 +121,8 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
       type = quote(ty, local.level);
     }
     const v = evaluate(val, local.vs);
-    const [body, rty] = synth(localExtend(local, tm.name, ty, v), tm.body);
-    return [Let(tm.name, type, val, body), rty];
+    const [body, rty] = synth(localExtend(local, tm.name, ty, tm.usage, v), tm.body);
+    return [Let(tm.usage, tm.name, type, val, body), rty];
   }
   return terr(`unable to synth ${show(tm)}`);
 };

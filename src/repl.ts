@@ -3,6 +3,7 @@ import { elaborate } from './elaboration';
 import { parse } from './parser';
 import { Let, show, showCore, Term, Var } from './surface';
 import * as C from './core';
+import { Usage } from './core';
 import { evaluate, normalize } from './values';
 import { Name } from './names';
 import { verify } from './verification';
@@ -20,7 +21,7 @@ COMMANDS
 `.trim();
 
 let showStackTrace = false;
-let defs: [Name, Term | null, Term][] = [];
+let defs: [Usage, Name, Term | null, Term][] = [];
 let elocal: Elab.Local = Elab.localEmpty;
 let vlocal: Verif.Local = Verif.localEmpty;
 
@@ -46,7 +47,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       return cb(`showStackTrace: ${showStackTrace}`);
     }
     if (s === ':defs')
-      return cb(defs.map(([x, t, v]) => `let ${x}${t ? ` : ${show(t)}` : ''} = ${show(v)}`).join('\n'));
+      return cb(defs.map(([u, x, t, v]) => `let ${u === '*' ? '' : `${u} `}${x}${t ? ` : ${show(t)}` : ''} = ${show(v)}`).join('\n'));
     if (s === ':clear') {
       defs = [];
       elocal = Elab.localEmpty;
@@ -65,7 +66,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     let isDef = false;
     if (term.tag === 'Let' && term.body === null) {
       isDef = true;
-      term = Let(term.name, term.type, term.val, Var(term.name));
+      term = Let(term.usage, term.name, term.type, term.val, Var(term.name));
     }
     log(() => show(term));
 
@@ -91,9 +92,9 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     const etermstr = showCore(eterm, elocal.ns);
 
     if (isDef && term.tag === 'Let') {
-      defs.push([term.name, term.type, term.val]);
-      elocal = Elab.localExtend(elocal, term.name, evaluate(etype, elocal.vs), evaluate(eterm, elocal.vs));
-      vlocal = Verif.localExtend(vlocal, evaluate(verifty, vlocal.vs), evaluate(eterm, vlocal.vs));
+      defs.push([term.usage, term.name, term.type, term.val]);
+      elocal = Elab.localExtend(elocal, term.name, evaluate(etype, elocal.vs), term.usage, evaluate(eterm, elocal.vs));
+      vlocal = Verif.localExtend(vlocal, evaluate(verifty, vlocal.vs),  term.usage, evaluate(eterm, vlocal.vs));
     }
 
     return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${etermstr}${normstr}`);
