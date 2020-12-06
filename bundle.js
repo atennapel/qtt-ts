@@ -140,7 +140,7 @@ exports.show = show;
 },{}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.elaborate = exports.inErased = exports.localUsage = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
+exports.elaborate = exports.unsafeLocalPop = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
 const config_1 = require("./config");
 const core_1 = require("./core");
 const list_1 = require("./utils/list");
@@ -164,103 +164,114 @@ const indexT = (ts, ix) => {
     }
     return null;
 };
-const Local = (usage, level, ns, ts, vs) => ({ usage, level, ns, ts, vs });
+const Local = (level, ns, ts, vs) => ({ level, ns, ts, vs });
 exports.Local = Local;
-exports.localEmpty = exports.Local('1', 0, list_1.Nil, list_1.Nil, list_1.Nil);
-const localExtend = (local, name, ty, usage, val = values_1.VVar(local.level)) => exports.Local(local.usage, local.level + 1, list_1.Cons(name, local.ns), list_1.Cons(exports.EntryT(ty, usage), local.ts), list_1.Cons(val, local.vs));
+exports.localEmpty = exports.Local(0, list_1.Nil, list_1.Nil, list_1.Nil);
+const localExtend = (local, name, ty, usage, val = values_1.VVar(local.level)) => exports.Local(local.level + 1, list_1.Cons(name, local.ns), list_1.Cons(exports.EntryT(ty, usage), local.ts), list_1.Cons(val, local.vs));
 exports.localExtend = localExtend;
-const localUsage = (local, usage) => exports.Local(usage, local.level, local.ns, local.ts, local.vs);
-exports.localUsage = localUsage;
-const inErased = (local) => exports.localUsage(local, '0');
-exports.inErased = inErased;
+const unsafeLocalPop = (local) => exports.Local(local.level - 1, local.ns.tail, local.ts.tail, local.vs.tail);
+exports.unsafeLocalPop = unsafeLocalPop;
 const showVal = (local, val) => S.showVal(val, local.level, local.ns);
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
     if (tm.tag === 'Type' && ty.tag === 'VType')
-        return core_1.Type;
+        return [core_1.Type, usage_1.noUses(local.level)];
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
         const v = values_1.VVar(local.level);
         const x = tm.name;
-        const body = check(exports.localExtend(local, x, ty.type, usage_1.multiply(ty.usage, local.usage), v), tm.body, values_1.vinst(ty, v));
-        return core_1.Abs(ty.usage, x, values_1.quote(ty.type, local.level), body);
+        const [body, u] = check(exports.localExtend(local, x, ty.type, ty.usage, v), tm.body, values_1.vinst(ty, v));
+        const [ux, urest] = list_1.uncons(u);
+        if (!usage_1.checkUse(ty.usage, ux))
+            return utils_1.terr(`usage error in ${surface_1.show(tm)}: expected ${ty.usage} for ${x} but actual ${ux}`);
+        return [core_1.Abs(ty.usage, x, values_1.quote(ty.type, local.level), body), urest];
     }
     if (tm.tag === 'Let') {
         let vtype;
         let vty;
         let val;
+        let uv;
         if (tm.type) {
-            vtype = check(exports.inErased(local), tm.type, values_1.VType);
+            [vtype] = check(local, tm.type, values_1.VType);
             vty = values_1.evaluate(vtype, local.vs);
-            val = check(local, tm.val, ty);
+            [val, uv] = check(local, tm.val, ty);
         }
         else {
-            [val, vty] = synth(local, tm.val);
+            [val, vty, uv] = synth(local, tm.val);
             vtype = values_1.quote(vty, local.level);
         }
         const v = values_1.evaluate(val, local.vs);
-        const body = check(exports.localExtend(local, tm.name, vty, tm.usage, v), tm.body, ty);
-        return core_1.Let(tm.usage, tm.name, vtype, val, body);
+        const [body, ub] = check(exports.localExtend(local, tm.name, vty, tm.usage, v), tm.body, ty);
+        const [ux, urest] = list_1.uncons(ub);
+        if (!usage_1.checkUse(tm.usage, ux))
+            return utils_1.terr(`usage error in ${surface_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
+        return [core_1.Let(tm.usage, tm.name, vtype, val, body), usage_1.addUses(usage_1.multiplyUses(ux, uv), urest)];
     }
-    const [term, ty2] = synth(local, tm);
+    const [term, ty2, uses] = synth(local, tm);
     return utils_1.tryT(() => {
         config_1.log(() => `unify ${showVal(local, ty2)} ~ ${showVal(local, ty)}`);
         conversion_1.conv(local.level, ty2, ty);
-        return term;
+        return [term, uses];
     }, e => utils_1.terr(`check failed (${surface_1.show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
 };
 const synth = (local, tm) => {
     config_1.log(() => `synth ${surface_1.show(tm)}`);
     if (tm.tag === 'Type')
-        return [core_1.Type, values_1.VType];
+        return [core_1.Type, values_1.VType, usage_1.noUses(local.level)];
     if (tm.tag === 'Var') {
         const i = list_1.indexOf(local.ns, tm.name);
         if (i < 0)
             return utils_1.terr(`undefined var ${tm.name}`);
         else {
             const [entry, j] = indexT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
-            if (local.usage === '1' && entry.usage === '0')
-                return utils_1.terr(`used erased variable: ${surface_1.show(tm)}`);
-            return [core_1.Var(j), entry.type];
+            const uses = list_1.updateAt(usage_1.noUses(local.level), j, _ => '1');
+            return [core_1.Var(j), entry.type, uses];
         }
     }
     if (tm.tag === 'App') {
-        const [fntm, fnty] = synth(local, tm.fn);
-        const [argtm, rty] = synthapp(local, fnty, tm.arg);
-        return [core_1.App(fntm, argtm), rty];
+        const [fntm, fnty, fnu] = synth(local, tm.fn);
+        const [argtm, rty, fnarg] = synthapp(local, fnty, tm.arg);
+        return [core_1.App(fntm, argtm), rty, usage_1.addUses(fnu, fnarg)];
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
-            const type = check(exports.inErased(local), tm.type, values_1.VType);
+            const [type] = check(local, tm.type, values_1.VType);
             const ty = values_1.evaluate(type, local.vs);
-            const [body, rty] = synth(exports.localExtend(local, tm.name, ty, usage_1.multiply(tm.usage, local.usage)), tm.body);
+            const [body, rty, u] = synth(exports.localExtend(local, tm.name, ty, tm.usage), tm.body);
             const pi = values_1.evaluate(core_1.Pi(tm.usage, tm.name, type, values_1.quote(rty, local.level + 1)), local.vs);
-            return [core_1.Abs(tm.usage, tm.name, type, body), pi];
+            const [ux, urest] = list_1.uncons(u);
+            if (!usage_1.checkUse(tm.usage, ux))
+                return utils_1.terr(`usage error in ${surface_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
+            return [core_1.Abs(tm.usage, tm.name, type, body), pi, urest];
         }
         else
             utils_1.terr(`cannot synth unannotated lambda: ${surface_1.show(tm)}`);
     }
     if (tm.tag === 'Pi') {
-        const type = check(exports.inErased(local), tm.type, values_1.VType);
+        const [type] = check(local, tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const body = check(exports.localExtend(exports.inErased(local), tm.name, ty, '0'), tm.body, values_1.VType);
-        return [core_1.Pi(tm.usage, tm.name, type, body), values_1.VType];
+        const [body] = check(exports.localExtend(local, tm.name, ty, '0'), tm.body, values_1.VType);
+        return [core_1.Pi(tm.usage, tm.name, type, body), values_1.VType, usage_1.noUses(local.level)];
     }
     if (tm.tag === 'Let') {
         let type;
         let ty;
         let val;
+        let uv;
         if (tm.type) {
-            type = check(exports.inErased(local), tm.type, values_1.VType);
+            [type] = check(local, tm.type, values_1.VType);
             ty = values_1.evaluate(type, local.vs);
-            val = check(local, tm.val, ty);
+            [val, uv] = check(local, tm.val, ty);
         }
         else {
-            [val, ty] = synth(local, tm.val);
+            [val, ty, uv] = synth(local, tm.val);
             type = values_1.quote(ty, local.level);
         }
         const v = values_1.evaluate(val, local.vs);
-        const [body, rty] = synth(exports.localExtend(local, tm.name, ty, tm.usage, v), tm.body);
-        return [core_1.Let(tm.usage, tm.name, type, val, body), rty];
+        const [body, rty, ub] = synth(exports.localExtend(local, tm.name, ty, tm.usage, v), tm.body);
+        const [ux, urest] = list_1.uncons(ub);
+        if (!usage_1.checkUse(tm.usage, ux))
+            return utils_1.terr(`usage error in ${surface_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
+        return [core_1.Let(tm.usage, tm.name, type, val, body), rty, usage_1.addUses(usage_1.multiplyUses(ux, uv), urest)];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
@@ -268,10 +279,9 @@ const synthapp = (local, ty, arg) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @ ${surface_1.show(arg)}`);
     if (ty.tag === 'VPi') {
         const cty = ty.type;
-        const newlocal = local.usage === '0' || ty.usage === '0' ? exports.inErased(local) : local;
-        const term = check(newlocal, arg, cty);
-        const v = values_1.evaluate(term, newlocal.vs);
-        return [term, values_1.vinst(ty, v)];
+        const [term, uses] = check(local, arg, cty);
+        const v = values_1.evaluate(term, local.vs);
+        return [term, values_1.vinst(ty, v), usage_1.multiplyUses(ty.usage, uses)];
     }
     return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @ ${surface_1.show(arg)}`);
 };
@@ -711,6 +721,7 @@ COMMANDS
 [:type or :t] do not normalize
 [:defs] show definitions
 [:clear] clear definitions
+[:undoDef] undo last def
 `.trim();
 let showStackTrace = false;
 let defs = [];
@@ -744,6 +755,15 @@ const runREPL = (s_, cb) => {
             elocal = Elab.localEmpty;
             vlocal = Verif.localEmpty;
             return cb(`cleared definitions`);
+        }
+        if (s === ':undoDef') {
+            if (defs.length > 0) {
+                const [u, x, t, v] = defs.pop();
+                elocal = Elab.unsafeLocalPop(elocal);
+                vlocal = Verif.unsafeLocalPop(vlocal);
+                return cb(`undid let ${u === '*' ? '' : `${u} `}${x}${t ? ` : ${surface_1.show(t)}` : ''} = ${surface_1.show(v)}`);
+            }
+            cb(`no def to undo`);
         }
         let typeOnly = false;
         if (s.startsWith(':type') || s.startsWith(':t')) {
@@ -895,7 +915,8 @@ exports.showVal = showVal;
 },{"./names":5,"./utils/list":10,"./utils/utils":11,"./values":12}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.add = exports.multiply = void 0;
+exports.checkUse = exports.multiplyUses = exports.addUses = exports.noUses = exports.add = exports.multiply = void 0;
+const list_1 = require("./utils/list");
 const multiply = (a, b) => {
     if (a === '0' || b === '0')
         return '0';
@@ -916,11 +937,25 @@ const add = (a, b) => {
     return '*';
 };
 exports.add = add;
+const noUses = (size) => list_1.map(list_1.range(size), _ => '0');
+exports.noUses = noUses;
+const addUses = (a, b) => list_1.zipWith(exports.add, a, b);
+exports.addUses = addUses;
+const multiplyUses = (a, b) => list_1.map(b, x => exports.multiply(a, x));
+exports.multiplyUses = multiplyUses;
+const checkUse = (ex, act) => {
+    if (ex === '0' && act !== '0')
+        return false;
+    if (ex === '1' && act !== '1')
+        return false;
+    return true;
+};
+exports.checkUse = checkUse;
 
-},{}],10:[function(require,module,exports){
+},{"./utils/list":10}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.indexOfFn = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.tail = exports.head = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
+exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.updateAt = exports.indexOfFn = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.uncons = exports.tail = exports.head = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
 exports.Nil = { tag: 'Nil' };
 const Cons = (head, tail) => ({ tag: 'Cons', head, tail });
 exports.Cons = Cons;
@@ -932,6 +967,11 @@ const head = (l) => l.head;
 exports.head = head;
 const tail = (l) => l.tail;
 exports.tail = tail;
+const uncons = (l) => {
+    const x = l;
+    return [x.head, x.tail];
+};
+exports.uncons = uncons;
 const listToString = (l, fn = x => `${x}`) => {
     const r = [];
     let c = l;
@@ -1035,6 +1075,8 @@ const indexOfFn = (l, x) => {
     return -1;
 };
 exports.indexOfFn = indexOfFn;
+const updateAt = (l, i, fn) => l.tag === 'Nil' ? l : i <= 0 ? exports.Cons(fn(l.head), l.tail) : exports.Cons(l.head, exports.updateAt(l.tail, i - 1, fn));
+exports.updateAt = updateAt;
 const takeWhile = (l, fn) => l.tag === 'Cons' && fn(l.head) ? exports.Cons(l.head, exports.takeWhile(l.tail, fn)) : exports.Nil;
 exports.takeWhile = takeWhile;
 const dropWhile = (l, fn) => l.tag === 'Cons' && fn(l.head) ? exports.dropWhile(l.tail, fn) : l;
@@ -1270,7 +1312,7 @@ exports.show = show;
 },{"./core":3,"./utils/list":10,"./utils/utils":11}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verify = exports.inErased = exports.localUsage = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
+exports.verify = exports.unsafeLocalPop = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
 const config_1 = require("./config");
 const core_1 = require("./core");
 const list_1 = require("./utils/list");
@@ -1293,60 +1335,63 @@ const indexT = (ts, ix) => {
     }
     return null;
 };
-const Local = (usage, level, ts, vs) => ({ usage, level, ts, vs });
+const Local = (level, ts, vs) => ({ level, ts, vs });
 exports.Local = Local;
-exports.localEmpty = exports.Local('1', 0, list_1.Nil, list_1.Nil);
-const localExtend = (local, ty, usage, val = values_1.VVar(local.level)) => exports.Local(local.usage, local.level + 1, list_1.Cons(exports.EntryT(ty, usage), local.ts), list_1.Cons(val, local.vs));
+exports.localEmpty = exports.Local(0, list_1.Nil, list_1.Nil);
+const localExtend = (local, ty, usage, val = values_1.VVar(local.level)) => exports.Local(local.level + 1, list_1.Cons(exports.EntryT(ty, usage), local.ts), list_1.Cons(val, local.vs));
 exports.localExtend = localExtend;
-const localUsage = (local, usage) => exports.Local(usage, local.level, local.ts, local.vs);
-exports.localUsage = localUsage;
-const inErased = (local) => exports.localUsage(local, '0');
-exports.inErased = inErased;
+const unsafeLocalPop = (local) => exports.Local(local.level - 1, local.ts.tail, local.vs.tail);
+exports.unsafeLocalPop = unsafeLocalPop;
 const showVal = (local, val) => V.show(val, local.level);
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${core_1.show(tm)} : ${showVal(local, ty)}`);
-    const ty2 = synth(local, tm);
+    const [ty2, u] = synth(local, tm);
     return utils_1.tryT(() => {
         config_1.log(() => `unify ${showVal(local, ty2)} ~ ${showVal(local, ty)}`);
         conversion_1.conv(local.level, ty2, ty);
-        return;
+        return u;
     }, e => utils_1.terr(`check failed (${core_1.show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
 };
 const synth = (local, tm) => {
     config_1.log(() => `synth ${core_1.show(tm)}`);
     if (tm.tag === 'Type')
-        return values_1.VType;
+        return [values_1.VType, usage_1.noUses(local.level)];
     if (tm.tag === 'Var') {
-        const [entry] = indexT(local.ts, tm.index) || utils_1.terr(`var out of scope ${core_1.show(tm)}`);
-        if (local.usage === '1' && entry.usage === '0')
-            return utils_1.terr(`used erased variable: ${core_1.show(tm)}`);
-        return entry.type;
+        const [entry, j] = indexT(local.ts, tm.index) || utils_1.terr(`var out of scope ${core_1.show(tm)}`);
+        const uses = list_1.updateAt(usage_1.noUses(local.level), j, _ => '1');
+        return [entry.type, uses];
     }
     if (tm.tag === 'App') {
-        const fnty = synth(local, tm.fn);
-        const rty = synthapp(local, fnty, tm.arg);
-        return rty;
+        const [fnty, fnu] = synth(local, tm.fn);
+        const [rty, argu] = synthapp(local, fnty, tm.arg);
+        return [rty, usage_1.addUses(fnu, argu)];
     }
     if (tm.tag === 'Abs') {
-        check(exports.inErased(local), tm.type, values_1.VType);
+        check(local, tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const rty = synth(exports.localExtend(local, ty, usage_1.multiply(tm.usage, local.usage)), tm.body);
+        const [rty, u] = synth(exports.localExtend(local, ty, tm.usage), tm.body);
         const pi = values_1.evaluate(core_1.Pi(tm.usage, tm.name, tm.type, values_1.quote(rty, local.level + 1)), local.vs);
-        return pi;
+        const [ux, urest] = list_1.uncons(u);
+        if (!usage_1.checkUse(tm.usage, ux))
+            return utils_1.terr(`usage error in ${core_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
+        return [pi, urest];
     }
     if (tm.tag === 'Pi') {
-        check(exports.inErased(local), tm.type, values_1.VType);
+        check(local, tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(exports.localExtend(exports.localUsage(local, '0'), ty, '0'), tm.body, values_1.VType);
-        return values_1.VType;
+        check(exports.localExtend(local, ty, '0'), tm.body, values_1.VType);
+        return [values_1.VType, usage_1.noUses(local.level)];
     }
     if (tm.tag === 'Let') {
-        check(exports.inErased(local), tm.type, values_1.VType);
+        check(local, tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(local, tm.val, ty);
+        const uv = check(local, tm.val, ty);
         const v = values_1.evaluate(tm.val, local.vs);
-        const rty = synth(exports.localExtend(local, ty, tm.usage, v), tm.body);
-        return rty;
+        const [rty, ub] = synth(exports.localExtend(local, ty, tm.usage, v), tm.body);
+        const [ux, urest] = list_1.uncons(ub);
+        if (!usage_1.checkUse(tm.usage, ux))
+            return utils_1.terr(`usage error in ${core_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
+        return [rty, usage_1.addUses(usage_1.multiplyUses(ux, uv), urest)];
     }
     return utils_1.terr(`unable to synth ${core_1.show(tm)}`);
 };
@@ -1354,15 +1399,14 @@ const synthapp = (local, ty, arg) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @ ${core_1.show(arg)}`);
     if (ty.tag === 'VPi') {
         const cty = ty.type;
-        const newlocal = local.usage === '0' || ty.usage === '0' ? exports.inErased(local) : local;
-        check(newlocal, arg, cty);
-        const v = values_1.evaluate(arg, newlocal.vs);
-        return values_1.vinst(ty, v);
+        const uses = check(local, arg, cty);
+        const v = values_1.evaluate(arg, local.vs);
+        return [values_1.vinst(ty, v), usage_1.multiplyUses(ty.usage, uses)];
     }
     return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @ ${core_1.show(arg)}`);
 };
 const verify = (t, local = exports.localEmpty) => {
-    const vty = synth(local, t);
+    const [vty] = synth(local, t);
     const ty = values_1.quote(vty, 0);
     return ty;
 };

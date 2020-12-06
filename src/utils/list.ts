@@ -20,6 +20,11 @@ export const list = <T>(...a: T[]): List<T> => listFrom(a);
 export const head = <T>(l: List<T>): T => (l as Cons<T>).head;
 export const tail = <T>(l: List<T>): List<T> => (l as Cons<T>).tail;
 
+export const uncons = <T>(l: List<T>): [T, List<T>] => {
+  const x = l as Cons<T>;
+  return [x.head, x.tail];
+};
+
 export const listToString = <T>(l: List<T>, fn: (val: T) => string = x => `${x}`): string => {
   const r: string[] = [];
   let c = l;
@@ -117,6 +122,9 @@ export const indexOfFn = <T>(l: List<T>, x: (v: T) => boolean): number => {
   }
   return -1;
 };
+
+export const updateAt = <T>(l: List<T>, i: number, fn: (x: T) => T): List<T> =>
+  l.tag === 'Nil' ? l : i <= 0 ? Cons(fn(l.head), l.tail) : Cons(l.head, updateAt(l.tail, i - 1, fn));
 
 export const takeWhile = <T>(l: List<T>, fn: (val: T) => boolean): List<T> =>
   l.tag === 'Cons' && fn(l.head) ? Cons(l.head, takeWhile(l.tail, fn)) : Nil;

@@ -18,6 +18,7 @@ COMMANDS
 [:type or :t] do not normalize
 [:defs] show definitions
 [:clear] clear definitions
+[:undoDef] undo last def
 `.trim();
 
 let showStackTrace = false;
@@ -53,6 +54,15 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       elocal = Elab.localEmpty;
       vlocal = Verif.localEmpty;
       return cb(`cleared definitions`);
+    }
+    if (s === ':undoDef') {
+      if (defs.length > 0) {
+        const [u, x, t, v] = (defs.pop() as any);
+        elocal = Elab.unsafeLocalPop(elocal);
+        vlocal = Verif.unsafeLocalPop(vlocal);
+        return cb(`undid let ${u === '*' ? '' : `${u} `}${x}${t ? ` : ${show(t)}` : ''} = ${show(v)}`);
+      }
+      cb(`no def to undo`);
     }
     let typeOnly = false;    
     if (s.startsWith(':type') || s.startsWith(':t')) {

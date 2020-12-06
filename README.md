@@ -19,13 +19,14 @@ yarn start example.p
 Notes:
 - this implements the 0, 1, unrestricted (which I denote with *) rig
 - application does not have the usage annotation, these will be infered from the function type
+- lambda with unannotated usage will be * by default unless checked against a function type, then it will use the usage from the type
 
 Currently done:
 - basic type theory with dependent functions and type-in-type
 - erasure check
+- linear check
 
 Not yet done:
-- linear check
 - sigma types
 - erase to untyped lambda calculus
 
