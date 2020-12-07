@@ -1,8 +1,12 @@
-This is a (hopefully) simple implementation of Quantitative Type Theory, in TypeScript.
-
-See https://github.com/AndrasKovacs/elaboration-zoo for an explanation of how the typechecking algorithm works.
+This is a (hopefully) simple implementation of Quantitative Type Theory/Graded Dependent Types, in TypeScript.
 
 Try it out at https://atennapel.github.io/qtt-ts
+
+References:
+- "Syntax and Semantics of Quantitative Type Theory"
+- "A graded dependent type system with a usage-aware semantics"
+- See https://github.com/AndrasKovacs/elaboration-zoo for an explanation of how the typechecking algorithm works.
+- I used some of the rules from https://github.com/BramvanVeenschoten1/qtt for the implementation of QTT.
 
 Run CLI REPL:
 ```
