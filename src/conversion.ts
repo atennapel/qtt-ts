@@ -17,6 +17,8 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
 export const conv = (k: Ix, a: Val, b: Val): void => {
   log(() => `conv(${k}): ${show(a, k)} ~ ${show(b, k)}`);
   if (a === b) return;
+  if (a.tag === 'VUnitType' && b.tag === 'VUnitType') return;
+  if (a.tag === 'VUnit' && b.tag === 'VUnit') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.usage === b.usage) {
     conv(k, a.type, b.type);
     const v = VVar(k);
@@ -35,6 +37,9 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     const v = VVar(k);
     return conv(k + 1, vapp(a, v), vinst(b, v));
   }
+
+  // unit eta law
+  if (a.tag === 'VUnit' || b.tag === 'VUnit') return;
 
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head))
     return zipWithR_((x, y) => convElim(k, x, y, a, b), a.spine, b.spine);

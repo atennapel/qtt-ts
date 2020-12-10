@@ -1,9 +1,9 @@
 import { log } from './config';
-import { Abs, App, Let, Pi, Term, Type, Var } from './core';
+import { Abs, App, Let, Pi, Term, Type, Unit, UnitType, Var } from './core';
 import { Ix, Name } from './names';
 import { Cons, indexOf, List, Nil, uncons, updateAt } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
@@ -44,6 +44,8 @@ const showVal = (local: Local, val: Val): string => S.showVal(val, local.level, 
 const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
   log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
   if (tm.tag === 'Type' && ty.tag === 'VType') return [Type, noUses(local.level)];
+  if (tm.tag === 'UnitType' && ty.tag === 'VType') return [UnitType, noUses(local.level)];
+  if (tm.tag === 'Unit' && ty.tag === 'VUnitType') return [Unit, noUses(local.level)];
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
     const v = VVar(local.level);
     const x = tm.name;
@@ -84,6 +86,8 @@ const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
 const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
   log(() => `synth ${show(tm)}`);
   if (tm.tag === 'Type') return [Type, VType, noUses(local.level)];
+  if (tm.tag === 'UnitType') return [UnitType, VType, noUses(local.level)];
+  if (tm.tag === 'Unit') return [Unit, VUnitType, noUses(local.level)];
   if (tm.tag === 'Var') {
     const i = indexOf(local.ns, tm.name);
     if (i < 0) return terr(`undefined var ${tm.name}`);

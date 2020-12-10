@@ -1,4 +1,4 @@
-import { Abs, App, Pi, Term, Type, Var } from './core';
+import { Abs, App, Pi, Term, Type, Var, UnitType, Unit } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
@@ -21,7 +21,7 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VType | VNe | VAbs | VPi;
+export type Val = VType | VNe | VAbs | VPi | VUnitType | VUnit;
 
 export interface VType { readonly tag: 'VType' }
 export const VType: VType = { tag: 'VType' };
@@ -31,6 +31,10 @@ export interface VAbs { readonly tag: 'VAbs'; readonly usage: Usage; readonly na
 export const VAbs = (usage: Usage, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', usage, name, type, clos });
 export interface VPi { readonly tag: 'VPi'; readonly usage: Usage; readonly name: Name; readonly type: Val; readonly clos: Clos }
 export const VPi = (usage: Usage, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', usage, name, type, clos });
+export interface VUnitType { readonly tag: 'VUnitType' }
+export const VUnitType: VUnitType = { tag: 'VUnitType' };
+export interface VUnit { readonly tag: 'VUnit' }
+export const VUnit: VUnit = { tag: 'VUnit' };
 
 export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' };
 
@@ -46,6 +50,8 @@ export const vapp = (left: Val, right: Val): Val => {
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType;
+  if (t.tag === 'UnitType') return VUnitType;
+  if (t.tag === 'Unit') return VUnit;
   if (t.tag === 'Abs')
     return VAbs(t.usage, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Pi')
@@ -69,6 +75,8 @@ const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
 };
 export const quote = (v: Val, k: Ix): Term => {
   if (v.tag === 'VType') return Type;
+  if (v.tag === 'VUnitType') return UnitType;
+  if (v.tag === 'VUnit') return Unit;
   if (v.tag === 'VNe')
     return foldr(
       (x, y) => quoteElim(y, x, k),

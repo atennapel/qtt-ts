@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -88,9 +88,6 @@ const tokenize = (sc: string): Token[] => {
   return r;
 };
 
-const tunit = Var('U');
-const unit = Var('Unit');
-
 const isName = (t: Token, x: Name): boolean =>
   t.tag === 'Name' && t.name === x;
 const isNames = (t: Token[]): Name[] =>
@@ -124,7 +121,7 @@ const lambdaParams = (t: Token, fromRepl: boolean): [Usage, Name, boolean, Term 
   if (t.tag === 'List') {
     const impl = t.bracket === '{';
     const a = t.list;
-    if (a.length === 0) return [[UsageRig.default, '_', impl, tunit]];
+    if (a.length === 0) return [[UsageRig.default, '_', impl, UnitType]];
     const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
     if (i === -1) return isNames(a).map(x => [UsageRig.default, x, impl, null]);
     let start = 0;
@@ -144,7 +141,7 @@ const piParams = (t: Token, fromRepl: boolean): [Usage, Name, boolean, Term][] =
   if (t.tag === 'List') {
     const impl = t.bracket === '{';
     const a = t.list;
-    if (a.length === 0) return [[UsageRig.default, '_', impl, tunit]];
+    if (a.length === 0) return [[UsageRig.default, '_', impl, UnitType]];
     const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
     if (i === -1) return [[UsageRig.default, '_', impl, expr(t, fromRepl)[0]]];
     let start = 0;
@@ -192,11 +189,12 @@ const expr = (t: Token, fromRepl: boolean): [Term, boolean] => {
     const s = codepoints(t.str).reverse();
     const Cons = Var('Cons');
     const Nil = Var('Nil');
-    return [s.reduce((t, n) => App(App(Cons, numToNat(n, '<codepoint>')), t), Nil as Term), false];
+    return [s.reduce((t, n) => App(App(Cons, numToNat(n, `codepoint: ${n}`)), t), Nil as Term), false];
   }
   if (t.tag === 'Name') {
     const x = t.name;
     if (x === 'Type') return [Type, false];
+    if (x === '*') return [Unit, false];
     if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
   }
@@ -228,7 +226,7 @@ const expr = (t: Token, fromRepl: boolean): [Term, boolean] => {
 
 const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
   if (br === '{') return serr(`{} cannot be used here`);
-  if (ts.length === 0) return unit;
+  if (ts.length === 0) return UnitType;
   if (ts.length === 1) return expr(ts[0], fromRepl)[0];
   if (isName(ts[0], 'let')) {
     let x = ts[1];

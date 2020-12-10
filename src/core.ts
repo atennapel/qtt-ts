@@ -2,7 +2,7 @@ import { Ix, Name } from './names';
 import { Usage, UsageRig } from './usage';
 
 /*
-u ::= 0 | 1 | *
+u ::= elements of partially ordered semigroup
 
 t ::=
   Type                -- universe
@@ -11,8 +11,11 @@ t ::=
   \(u x : t). t       -- lambda
   t t                 -- application
   let u x : t = t; t  -- let
+
+  ()                  -- unit type
+  *                   -- unit value
 */
-export type Term = Type | Var | Pi | Abs | App | Let;
+export type Term = Type | Var | Pi | Abs | App | Let | UnitType | Unit;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -26,6 +29,10 @@ export interface App { readonly tag: 'App'; readonly fn: Term; readonly arg: Ter
 export const App = (fn: Term, arg: Term): App => ({ tag: 'App', fn, arg });
 export interface Let { readonly usage: Usage; readonly tag: 'Let'; readonly name: Name; readonly type: Term; readonly val: Term; readonly body: Term }
 export const Let = (usage: Usage, name: Name, type: Term, val: Term, body: Term): Let => ({ tag: 'Let', usage, name, type, val, body });
+export interface UnitType { readonly tag: 'UnitType' }
+export const UnitType: UnitType = { tag: 'UnitType' };
+export interface Unit { readonly tag: 'Unit' }
+export const Unit: Unit = { tag: 'Unit' };
 
 export const flattenPi = (t: Term): [[Usage, Name, Term][], Term] => {
   const params: [Usage, Name, Term][] = [];
@@ -56,10 +63,12 @@ export const flattenApp = (t: Term): [Term, Term[]] => {
 };
 
 const showP = (b: boolean, t: Term) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var'; 
+const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'UnitType' || t.tag === 'Unit'; 
 export const show = (t: Term): string => {
-  if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Type') return 'Type';
+  if (t.tag === 'UnitType') return '()';
+  if (t.tag === 'Unit') return '*';
+  if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Pi') {
     const [params, ret] = flattenPi(t);
     return `${params.map(([u, x, t]) => u === UsageRig.default && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === UsageRig.default ? '' : `${u} `}${x} : ${show(t)})`).join(' -> ')} -> ${show(ret)}`;

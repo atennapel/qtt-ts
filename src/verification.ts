@@ -3,7 +3,7 @@ import { Pi, Term, show } from './core';
 import { Ix } from './names';
 import { Cons, List, Nil, updateAt, uncons } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar } from './values';
 import * as V from './values';
 import { conv } from './conversion';
 import { addUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
@@ -52,6 +52,8 @@ const check = (local: Local, tm: Term, ty: Val): Uses => {
 const synth = (local: Local, tm: Term): [Val, Uses] => {
   log(() => `synth ${show(tm)}`);
   if (tm.tag === 'Type') return [VType, noUses(local.level)];
+  if (tm.tag === 'UnitType') return [VType, noUses(local.level)];
+  if (tm.tag === 'Unit') return [VUnitType, noUses(local.level)];
   if (tm.tag === 'Var') {
     const [entry, j] = indexT(local.ts, tm.index) || terr(`var out of scope ${show(tm)}`);
     const uses = updateAt(noUses(local.level), j, _ => UsageRig.one);
