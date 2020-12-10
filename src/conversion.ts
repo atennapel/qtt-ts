@@ -38,6 +38,15 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     conv(k, a.fst, b.fst);
     return conv(k, a.snd, b.snd);
   }
+  if (a.tag === 'VSum' && b.tag === 'VSum') {
+    conv(k, a.left, b.left);
+    return conv(k, a.right, b.right);
+  }
+  if (a.tag === 'VInj' && b.tag === 'VInj' && a.which === b.which) {
+    conv(k, a.left, b.left);
+    conv(k, a.right, b.right);
+    return conv(k, a.val, b.val);
+  }
 
   if (a.tag === 'VAbs') {
     const v = VVar(k);

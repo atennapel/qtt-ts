@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -25,7 +25,7 @@ const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list,
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
 const SYM1: string[] = ['\\', ':', '=', ';', '*', ','];
-const SYM2: string[] = ['->', '**'];
+const SYM2: string[] = ['->', '**', '++'];
 
 const START = 0;
 const NAME = 1;
@@ -300,6 +300,11 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
     const body = exprs(ts.slice(i + 1), '(', fromRepl);
     return args.reduceRight((x, [u, name, , ty]) => Abs(u, name, ty, x), body);
   }
+  if (isName(ts[0], 'Left') || isName(ts[0], 'Right')) {
+    const tag = (ts[0] as any).name;
+    const val = exprs(ts.slice(1), br, fromRepl);
+    return Inj(tag, val);
+  }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {
     const s = splitTokens(ts, x => isName(x, '->'));
@@ -338,6 +343,25 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(', fromRepl);
     return args.reduceRight((x, [u, name, , ty]) => Sigma(u, name, ty, x), body);
+  }
+  const jsum = ts.findIndex(x => isName(x, '++'));
+  if (jsum >= 0) {
+    const s = splitTokens(ts, x => isName(x, '++'));
+    if (s.length < 2) return serr(`parsing failed with ++`);
+    const args: [Term, boolean][] = s.map(x => {
+      if (x.length === 1) {
+        const h = x[0];
+        if (h.tag === 'List' && h.bracket === '{')
+          return expr(h, fromRepl)
+      }
+      return [exprs(x, '(', fromRepl), false];
+    });
+    if (args.length === 0) return serr(`empty sum`);
+    if (args.length === 1) return serr(`singleton sum`);
+    const last1 = args[args.length - 1];
+    const last2 = args[args.length - 2];
+    const lastitem = Sum(last2[0], last1[0]);
+    return args.slice(0, -2).reduceRight((x, [y, _p]) => Sum(y, x), lastitem);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];

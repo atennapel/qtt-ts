@@ -29,9 +29,10 @@ Currently done:
 - basic type theory with dependent functions and type-in-type
 - erasure check
 - linear check
+- void, unit, sigma and sum types
 
 Not yet done:
-- sigma types
+- elimination of types
 - erase to untyped lambda calculus
 
 Will not be implemented:

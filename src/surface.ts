@@ -5,7 +5,7 @@ import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
 import { Usage, UsageRig } from './usage';
 
-export type Term = Type | Var | Pi | Abs | App | Let | Void | UnitType | Unit | Sigma | Pair;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | UnitType | Unit | Sigma | Pair | Sum | Inj;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -29,6 +29,10 @@ export interface Sigma { readonly tag: 'Sigma'; readonly usage: Usage; readonly 
 export const Sigma = (usage: Usage, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', usage, name, type, body });
 export interface Pair { readonly tag: 'Pair'; readonly fst: Term; readonly snd: Term }
 export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
+export interface Sum { readonly tag: 'Sum'; readonly left: Term; readonly right: Term }
+export const Sum = (left: Term, right: Term): Sum => ({ tag: 'Sum', left, right });
+export interface Inj { readonly tag: 'Inj'; readonly which: 'Left' | 'Right'; readonly val: Term }
+export const Inj = (which: 'Left' | 'Right', val: Term): Inj => ({ tag: 'Inj', which, val });
 
 export const flattenPi = (t: Term): [[Usage, Name, Term][], Term] => {
   const params: [Usage, Name, Term][] = [];
@@ -75,9 +79,18 @@ export const flattenPair = (t: Term): Term[] => {
   r.push(t);
   return r;
 };
+export const flattenSum = (t: Term): Term[] => {
+  const r: Term[] = [];
+  while (t.tag === 'Sum') {
+    r.push(t.left);
+    t = t.right;
+  }
+  r.push(t);
+  return r;
+};
 
 const showP = (b: boolean, t: Term) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair'; 
+const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair'; 
 export const show = (t: Term): string => {
   if (t.tag === 'Type') return 'Type';
   if (t.tag === 'Void') return 'Void';
@@ -106,6 +119,10 @@ export const show = (t: Term): string => {
     const ps = flattenPair(t);
     return `(${ps.map(show).join(', ')})`;
   }
+  if (t.tag === 'Sum')
+    return flattenSum(t).map(x => showP(!isSimple(x) && x.tag !== 'App', x)).join(' ++ ');
+  if (t.tag === 'Inj')
+    return `${t.which} ${showP(!isSimple(t.val), t.val)}`;
   return t;
 };
 
@@ -133,6 +150,8 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
     return Let(t.usage, x, fromCore(t.type, ns), fromCore(t.val, ns), fromCore(t.body, Cons(x, ns)));
   }
   if (t.tag === 'Pair') return Pair(fromCore(t.fst, ns), fromCore(t.snd, ns));
+  if (t.tag === 'Sum') return Sum(fromCore(t.left, ns), fromCore(t.right, ns));
+  if (t.tag === 'Inj') return Inj(t.which, fromCore(t.val, ns));
   return t;
 };
 

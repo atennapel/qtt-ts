@@ -3,7 +3,7 @@ import { Pi, Term, show } from './core';
 import { Ix } from './names';
 import { Cons, List, Nil, updateAt, uncons } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar, VSum } from './values';
 import * as V from './values';
 import { conv } from './conversion';
 import { addUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
@@ -107,6 +107,19 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     const u1 = check(local, tm.fst, vsigma.type);
     const u2 = check(local, tm.snd, vinst(vsigma, evaluate(tm.fst, local.vs)));
     return [vsigma, addUses(multiplyUses(vsigma.usage, u1), u2)];
+  }
+  if (tm.tag === 'Sum') {
+    const u1 = check(local, tm.left, VType);
+    const u2 = check(local, tm.right, VType);
+    return [VType, addUses(u1, u2)];
+  }
+  if (tm.tag === 'Inj') {
+    check(local, tm.left, VType);
+    check(local, tm.right, VType);
+    const vleft = evaluate(tm.left, local.vs);
+    const vright = evaluate(tm.right, local.vs);
+    const u = check(local, tm.val, tm.which === 'Left' ? vleft : vright);
+    return [VSum(vleft, vright), u];
   }
   return terr(`unable to synth ${show(tm)}`);
 };

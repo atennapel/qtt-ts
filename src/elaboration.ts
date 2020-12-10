@@ -1,9 +1,9 @@
 import { log } from './config';
-import { Abs, App, Let, Pair, Pi, Sigma, Term, Type, Unit, UnitType, Var, Void } from './core';
+import { Abs, App, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
 import { Ix, Name } from './names';
 import { Cons, indexOf, List, Nil, uncons, updateAt } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
@@ -60,6 +60,10 @@ const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
     const [fst, u1] = check(local, tm.fst, ty.type);
     const [snd, u2] = check(local, tm.snd, vinst(ty, evaluate(fst, local.vs)));
     return [Pair(fst, snd, quote(ty, local.level)), addUses(multiplyUses(ty.usage, u1), u2)];
+  }
+  if (tm.tag === 'Inj' && ty.tag === 'VSum') {
+    const [val, u] = check(local, tm.val, tm.which === 'Left' ? ty.left : ty.right);
+    return [Inj(tm.which, quote(ty.left, local.level), quote(ty.right, local.level), val), u];
   }
   if (tm.tag === 'Let') {
     let vtype: Term;
@@ -160,6 +164,17 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     if (!UsageRig.sub(ux, tm.usage))
       return terr(`usage error in ${show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
     return [Let(tm.usage, tm.name, type, val, body), rty, addUses(multiplyUses(ux, uv), urest)];
+  }
+  if (tm.tag === 'Sum') {
+    const [left, u1] = check(local, tm.left, VType);
+    const [right, u2] = check(local, tm.right, VType);
+    return [Sum(left, right), VType, addUses(u1, u2)];
+  }
+  if (tm.tag === 'Inj') {
+    const [val, ty, u] = synth(local, tm.val);
+    return tm.which === 'Left' ?
+      [Inj('Left', quote(ty, local.level), Void, val), VSum(ty, VVoid), u] :
+      [Inj('Right', Void, quote(ty, local.level), val), VSum(VVoid, ty), u];
   }
   return terr(`unable to synth ${show(tm)}`);
 };
