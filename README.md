@@ -39,3 +39,6 @@ Will not be implemented:
 - instance arguments
 - consistent universe hierarchy
 - datatypes
+
+Bugs:
+- "let 0" will fail in REPL
