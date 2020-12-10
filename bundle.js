@@ -1122,6 +1122,7 @@ const elaboration_1 = require("./elaboration");
 const parser_1 = require("./parser");
 const surface_1 = require("./surface");
 const C = require("./core");
+const usage_1 = require("./usage");
 const values_1 = require("./values");
 const verification_1 = require("./verification");
 const Elab = require("./elaboration");
@@ -1188,9 +1189,11 @@ const runREPL = (s_, cb) => {
         config_1.log(() => 'PARSE');
         let term = parser_1.parse(s, true);
         let isDef = false;
+        let usage = usage_1.UsageRig.default;
         if (term.tag === 'Let' && term.body === null) {
             isDef = true;
-            term = surface_1.Let(term.usage, term.name, term.type, term.val, surface_1.Var(term.name));
+            usage = term.usage;
+            term = surface_1.Let(term.usage === usage_1.UsageRig.zero ? usage_1.UsageRig.default : term.usage, term.name, term.type, term.val, surface_1.Var(term.name));
         }
         config_1.log(() => surface_1.show(term));
         config_1.log(() => 'ELABORATE');
@@ -1211,9 +1214,10 @@ const runREPL = (s_, cb) => {
         }
         const etermstr = surface_1.showCore(eterm, elocal.ns);
         if (isDef && term.tag === 'Let') {
-            defs.push([term.usage, term.name, term.type, term.val]);
-            elocal = Elab.localExtend(elocal, term.name, values_1.evaluate(etype, elocal.vs), term.usage, values_1.evaluate(eterm, elocal.vs));
-            vlocal = Verif.localExtend(vlocal, values_1.evaluate(verifty, vlocal.vs), term.usage, values_1.evaluate(eterm, vlocal.vs));
+            defs.push([usage, term.name, term.type, term.val]);
+            const value = values_1.evaluate(eterm, elocal.vs);
+            elocal = Elab.localExtend(elocal, term.name, values_1.evaluate(etype, elocal.vs), usage, value);
+            vlocal = Verif.localExtend(vlocal, values_1.evaluate(verifty, vlocal.vs), usage, value);
         }
         return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${etermstr}${normstr}`);
     }
@@ -1225,7 +1229,7 @@ const runREPL = (s_, cb) => {
 };
 exports.runREPL = runREPL;
 
-},{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":9,"./values":13,"./verification":14}],9:[function(require,module,exports){
+},{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":9,"./usage":10,"./values":13,"./verification":14}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Inj = exports.Sum = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;

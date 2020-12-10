@@ -3,7 +3,7 @@ import { elaborate } from './elaboration';
 import { parse } from './parser';
 import { Let, show, showCore, Term, Var } from './surface';
 import * as C from './core';
-import { Usage } from './usage';
+import { Usage, UsageRig } from './usage';
 import { evaluate, normalize } from './values';
 import { Name } from './names';
 import { verify } from './verification';
@@ -74,9 +74,11 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => 'PARSE');
     let term = parse(s, true);
     let isDef = false;
+    let usage = UsageRig.default;
     if (term.tag === 'Let' && term.body === null) {
       isDef = true;
-      term = Let(term.usage, term.name, term.type, term.val, Var(term.name));
+      usage = term.usage;
+      term = Let(term.usage === UsageRig.zero ? UsageRig.default : term.usage, term.name, term.type, term.val, Var(term.name));
     }
     log(() => show(term));
 
@@ -102,9 +104,10 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     const etermstr = showCore(eterm, elocal.ns);
 
     if (isDef && term.tag === 'Let') {
-      defs.push([term.usage, term.name, term.type, term.val]);
-      elocal = Elab.localExtend(elocal, term.name, evaluate(etype, elocal.vs), term.usage, evaluate(eterm, elocal.vs));
-      vlocal = Verif.localExtend(vlocal, evaluate(verifty, vlocal.vs),  term.usage, evaluate(eterm, vlocal.vs));
+      defs.push([usage, term.name, term.type, term.val]);
+      const value = evaluate(eterm, elocal.vs);
+      elocal = Elab.localExtend(elocal, term.name, evaluate(etype, elocal.vs), usage, value);
+      vlocal = Verif.localExtend(vlocal, evaluate(verifty, vlocal.vs), usage, value);
     }
 
     return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${etermstr}${normstr}`);

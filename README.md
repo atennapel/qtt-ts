@@ -27,8 +27,7 @@ Notes:
 
 Currently done:
 - basic type theory with dependent functions and type-in-type
-- erasure check
-- linear check
+- checks from graded dependent types
 - void, unit, sigma and sum types
 
 Not yet done:
@@ -40,6 +39,3 @@ Will not be implemented:
 - instance arguments
 - consistent universe hierarchy
 - datatypes
-
-Bugs:
-- "let 0" will fail in REPL
