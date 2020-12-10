@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -305,6 +305,12 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
     const val = exprs(ts.slice(1), br, fromRepl);
     return Inj(tag, val);
   }
+  if (isName(ts[0], 'indVoid')) {
+    if (ts.length !== 3) return serr(`indVoid expects exactly 2 arguments`);
+    const [motive] = expr(ts[1], fromRepl);
+    const [scrut] = expr(ts[2], fromRepl);
+    return IndVoid(motive, scrut);
+  }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {
     const s = splitTokens(ts, x => isName(x, '->'));
@@ -381,6 +387,6 @@ export const parse = (s: string, fromRepl: boolean = false): Term => {
   log(() => `parse ${s}`);
   const ts = tokenize(s);
   const ex = exprs(ts, '(', fromRepl);
-  log(() => `parsed ${show(ex)}`);
+  if (!fromRepl) log(() => `parsed ${show(ex)}`);
   return ex;
 };

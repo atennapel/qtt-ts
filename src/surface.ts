@@ -5,7 +5,7 @@ import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
 import { Usage, UsageRig } from './usage';
 
-export type Term = Type | Var | Pi | Abs | App | Let | Void | UnitType | Unit | Sigma | Pair | Sum | Inj;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | Sigma | Pair | Sum | Inj;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -21,6 +21,8 @@ export interface Let { readonly tag: 'Let'; readonly usage: Usage; readonly name
 export const Let = (usage: Usage, name: Name, type: Term | null, val: Term, body: Term): Let => ({ tag: 'Let', usage, name, type, val, body });
 export interface Void { readonly tag: 'Void' }
 export const Void: Void = { tag: 'Void' };
+export interface IndVoid { readonly tag: 'IndVoid'; readonly motive: Term; readonly scrut: Term }
+export const IndVoid = (motive: Term, scrut: Term): IndVoid => ({ tag: 'IndVoid', motive, scrut });
 export interface UnitType { readonly tag: 'UnitType' }
 export const UnitType: UnitType = { tag: 'UnitType' };
 export interface Unit { readonly tag: 'Unit' }
@@ -123,6 +125,8 @@ export const show = (t: Term): string => {
     return flattenSum(t).map(x => showP(!isSimple(x) && x.tag !== 'App', x)).join(' ++ ');
   if (t.tag === 'Inj')
     return `${t.which} ${showP(!isSimple(t.val), t.val)}`;
+  if (t.tag === 'IndVoid')
+    return `indVoid ${showP(!isSimple(t.motive), t.motive)} ${showP(!isSimple(t.scrut), t.scrut)}`;
   return t;
 };
 
@@ -152,6 +156,7 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Pair') return Pair(fromCore(t.fst, ns), fromCore(t.snd, ns));
   if (t.tag === 'Sum') return Sum(fromCore(t.left, ns), fromCore(t.right, ns));
   if (t.tag === 'Inj') return Inj(t.which, fromCore(t.val, ns));
+  if (t.tag === 'IndVoid') return IndVoid(fromCore(t.motive, ns), fromCore(t.scrut, ns));
   return t;
 };
 

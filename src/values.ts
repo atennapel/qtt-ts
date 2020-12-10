@@ -1,4 +1,4 @@
-import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair, Sum, Inj } from './core';
+import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair, Sum, Inj, IndVoid } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
@@ -12,10 +12,12 @@ export type Head = HVar;
 export interface HVar { readonly tag: 'HVar'; readonly level: Lvl }
 export const HVar = (level: Lvl): HVar => ({ tag: 'HVar', level });
 
-export type Elim = EApp;
+export type Elim = EApp | EIndVoid;
 
 export interface EApp { readonly tag: 'EApp'; readonly arg: Val }
 export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
+export interface EIndVoid { readonly tag: 'EIndVoid'; readonly motive: Val }
+export const EIndVoid = (motive: Val): EIndVoid => ({ tag: 'EIndVoid', motive });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
@@ -57,6 +59,10 @@ export const vapp = (left: Val, right: Val): Val => {
   if (left.tag === 'VNe') return VNe(left.head, Cons(EApp(right), left.spine));
   return impossible(`vapp: ${left.tag}`);
 };
+export const vindvoid = (motive: Val, scrut: Val) => {
+  if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndVoid(motive), scrut.spine));
+  return impossible(`vindvoid: ${scrut.tag}`);
+};
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType;
@@ -81,6 +87,8 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return VSum(evaluate(t.left, vs), evaluate(t.right, vs));
   if (t.tag === 'Inj')
     return VInj(t.which, evaluate(t.left, vs), evaluate(t.right, vs), evaluate(t.val, vs));
+  if (t.tag === 'IndVoid')
+    return vindvoid(evaluate(t.motive, vs), evaluate(t.scrut, vs));
   return t;
 };
 
@@ -90,7 +98,8 @@ const quoteHead = (h: Head, k: Ix): Term => {
 };
 const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
   if (e.tag === 'EApp') return App(t, quote(e.arg, k));
-  return e.tag;
+  if (e.tag === 'EIndVoid') return IndVoid(quote(e.motive, k), t);
+  return e;
 };
 export const quote = (v: Val, k: Ix): Term => {
   if (v.tag === 'VType') return Type;

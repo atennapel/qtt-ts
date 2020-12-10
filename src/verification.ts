@@ -121,6 +121,11 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     const u = check(local, tm.val, tm.which === 'Left' ? vleft : vright);
     return [VSum(vleft, vright), u];
   }
+  if (tm.tag === 'IndVoid') {
+    check(local, tm.motive, V.VPi(UsageRig.default, '_', V.VVoid, _ => VType));
+    const u = check(local, tm.scrut, V.VVoid);
+    return [V.vapp(evaluate(tm.motive, local.vs), evaluate(tm.scrut, local.vs)), u];
+  }
   return terr(`unable to synth ${show(tm)}`);
 };
 

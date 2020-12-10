@@ -1,9 +1,9 @@
 import { log } from './config';
-import { Abs, App, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
+import { Abs, App, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
 import { Ix, Name } from './names';
 import { Cons, indexOf, List, Nil, uncons, updateAt } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
@@ -175,6 +175,11 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     return tm.which === 'Left' ?
       [Inj('Left', quote(ty, local.level), Void, val), VSum(ty, VVoid), u] :
       [Inj('Right', Void, quote(ty, local.level), val), VSum(VVoid, ty), u];
+  }
+  if (tm.tag === 'IndVoid') {
+    const [motive] = check(local, tm.motive, VPi(UsageRig.default, '_', VVoid, _ => VType));
+    const [scrut, u] = check(local, tm.scrut, VVoid);
+    return [IndVoid(motive, scrut), vapp(evaluate(motive, local.vs), evaluate(scrut, local.vs)), u];
   }
   return terr(`unable to synth ${show(tm)}`);
 };

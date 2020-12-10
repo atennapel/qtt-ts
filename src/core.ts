@@ -13,18 +13,19 @@ t ::=
   let u x : t = t; t  -- let
 
   Void                -- void/empty type
+  indVoid P x         -- void induction
 
   ()                  -- unit type
   *                   -- unit value
 
-  (x : t) ** t        -- sigma/pair type
+  (u x : t) ** t        -- sigma/pair type
   (t, t : t)          -- pair
 
   t ++ t              -- sum type
   Left t t t          -- left injection
   Right t t t         -- right injection
 */
-export type Term = Type | Var | Pi | Abs | App | Let | Void | UnitType | Unit | Sigma | Pair | Sum | Inj;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | Sigma | Pair | Sum | Inj;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -40,6 +41,8 @@ export interface Let { readonly usage: Usage; readonly tag: 'Let'; readonly name
 export const Let = (usage: Usage, name: Name, type: Term, val: Term, body: Term): Let => ({ tag: 'Let', usage, name, type, val, body });
 export interface Void { readonly tag: 'Void' }
 export const Void: Void = { tag: 'Void' };
+export interface IndVoid { readonly tag: 'IndVoid'; readonly motive: Term; readonly scrut: Term }
+export const IndVoid = (motive: Term, scrut: Term): IndVoid => ({ tag: 'IndVoid', motive, scrut });
 export interface UnitType { readonly tag: 'UnitType' }
 export const UnitType: UnitType = { tag: 'UnitType' };
 export interface Unit { readonly tag: 'Unit' }
@@ -142,5 +145,7 @@ export const show = (t: Term): string => {
     return flattenSum(t).map(x => showP(!isSimple(x) && x.tag !== 'App', x)).join(' ++ ');
   if (t.tag === 'Inj')
     return `${t.which} ${showP(!isSimple(t.left), t.left)} ${showP(!isSimple(t.right), t.right)} ${showP(!isSimple(t.val), t.val)}`;
+  if (t.tag === 'IndVoid')
+    return `indVoid ${showP(!isSimple(t.motive), t.motive)} ${showP(!isSimple(t.scrut), t.scrut)}`;
   return t;
 };

@@ -38,6 +38,8 @@ const convElim = (k, a, b, x, y) => {
         return;
     if (a.tag === 'EApp' && b.tag === 'EApp')
         return exports.conv(k, a.arg, b.arg);
+    if (a.tag === 'EIndVoid' && b.tag === 'EIndVoid')
+        return exports.conv(k, a.motive, b.motive);
     return utils_1.terr(`conv failed (${k}): ${values_1.show(x, k)} ~ ${values_1.show(y, k)}`);
 };
 const conv = (k, a, b) => {
@@ -106,7 +108,7 @@ exports.conv = conv;
 },{"./config":1,"./utils/list":11,"./utils/utils":12,"./values":13}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Inj = exports.Sum = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Inj = exports.Sum = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const usage_1 = require("./usage");
 exports.Type = { tag: 'Type' };
 const Var = (index) => ({ tag: 'Var', index });
@@ -120,6 +122,8 @@ exports.App = App;
 const Let = (usage, name, type, val, body) => ({ tag: 'Let', usage, name, type, val, body });
 exports.Let = Let;
 exports.Void = { tag: 'Void' };
+const IndVoid = (motive, scrut) => ({ tag: 'IndVoid', motive, scrut });
+exports.IndVoid = IndVoid;
 exports.UnitType = { tag: 'UnitType' };
 exports.Unit = { tag: 'Unit' };
 const Sigma = (usage, name, type, body) => ({ tag: 'Sigma', usage, name, type, body });
@@ -229,6 +233,8 @@ const show = (t) => {
         return exports.flattenSum(t).map(x => showP(!isSimple(x) && x.tag !== 'App', x)).join(' ++ ');
     if (t.tag === 'Inj')
         return `${t.which} ${showP(!isSimple(t.left), t.left)} ${showP(!isSimple(t.right), t.right)} ${showP(!isSimple(t.val), t.val)}`;
+    if (t.tag === 'IndVoid')
+        return `indVoid ${showP(!isSimple(t.motive), t.motive)} ${showP(!isSimple(t.scrut), t.scrut)}`;
     return t;
 };
 exports.show = show;
@@ -414,6 +420,11 @@ const synth = (local, tm) => {
         return tm.which === 'Left' ?
             [core_1.Inj('Left', values_1.quote(ty, local.level), core_1.Void, val), values_1.VSum(ty, values_1.VVoid), u] :
             [core_1.Inj('Right', core_1.Void, values_1.quote(ty, local.level), val), values_1.VSum(values_1.VVoid, ty), u];
+    }
+    if (tm.tag === 'IndVoid') {
+        const [motive] = check(local, tm.motive, values_1.VPi(usage_1.UsageRig.default, '_', values_1.VVoid, _ => values_1.VType));
+        const [scrut, u] = check(local, tm.scrut, values_1.VVoid);
+        return [core_1.IndVoid(motive, scrut), values_1.vapp(values_1.evaluate(motive, local.vs), values_1.evaluate(scrut, local.vs)), u];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
@@ -818,6 +829,13 @@ const exprs = (ts, br, fromRepl) => {
         const val = exprs(ts.slice(1), br, fromRepl);
         return surface_1.Inj(tag, val);
     }
+    if (isName(ts[0], 'indVoid')) {
+        if (ts.length !== 3)
+            return utils_1.serr(`indVoid expects exactly 2 arguments`);
+        const [motive] = expr(ts[1], fromRepl);
+        const [scrut] = expr(ts[2], fromRepl);
+        return surface_1.IndVoid(motive, scrut);
+    }
     const j = ts.findIndex(x => isName(x, '->'));
     if (j >= 0) {
         const s = splitTokens(ts, x => isName(x, '->'));
@@ -904,7 +922,8 @@ const parse = (s, fromRepl = false) => {
     config_1.log(() => `parse ${s}`);
     const ts = tokenize(s);
     const ex = exprs(ts, '(', fromRepl);
-    config_1.log(() => `parsed ${surface_1.show(ex)}`);
+    if (!fromRepl)
+        config_1.log(() => `parsed ${surface_1.show(ex)}`);
     return ex;
 };
 exports.parse = parse;
@@ -1232,7 +1251,7 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":9,"./usage":10,"./values":13,"./verification":14}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Inj = exports.Sum = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Inj = exports.Sum = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const names_1 = require("./names");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
@@ -1250,6 +1269,8 @@ exports.App = App;
 const Let = (usage, name, type, val, body) => ({ tag: 'Let', usage, name, type, val, body });
 exports.Let = Let;
 exports.Void = { tag: 'Void' };
+const IndVoid = (motive, scrut) => ({ tag: 'IndVoid', motive, scrut });
+exports.IndVoid = IndVoid;
 exports.UnitType = { tag: 'UnitType' };
 exports.Unit = { tag: 'Unit' };
 const Sigma = (usage, name, type, body) => ({ tag: 'Sigma', usage, name, type, body });
@@ -1359,6 +1380,8 @@ const show = (t) => {
         return exports.flattenSum(t).map(x => showP(!isSimple(x) && x.tag !== 'App', x)).join(' ++ ');
     if (t.tag === 'Inj')
         return `${t.which} ${showP(!isSimple(t.val), t.val)}`;
+    if (t.tag === 'IndVoid')
+        return `indVoid ${showP(!isSimple(t.motive), t.motive)} ${showP(!isSimple(t.scrut), t.scrut)}`;
     return t;
 };
 exports.show = show;
@@ -1397,6 +1420,8 @@ const fromCore = (t, ns = list_1.Nil) => {
         return exports.Sum(exports.fromCore(t.left, ns), exports.fromCore(t.right, ns));
     if (t.tag === 'Inj')
         return exports.Inj(t.which, exports.fromCore(t.val, ns));
+    if (t.tag === 'IndVoid')
+        return exports.IndVoid(exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns));
     return t;
 };
 exports.fromCore = fromCore;
@@ -1707,7 +1732,7 @@ exports.eqArr = eqArr;
 },{"fs":16}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vapp = exports.vinst = exports.VVar = exports.VInj = exports.VSum = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EApp = exports.HVar = void 0;
+exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vindvoid = exports.vapp = exports.vinst = exports.VVar = exports.VInj = exports.VSum = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EIndVoid = exports.EApp = exports.HVar = void 0;
 const core_1 = require("./core");
 const C = require("./core");
 const list_1 = require("./utils/list");
@@ -1716,6 +1741,8 @@ const HVar = (level) => ({ tag: 'HVar', level });
 exports.HVar = HVar;
 const EApp = (arg) => ({ tag: 'EApp', arg });
 exports.EApp = EApp;
+const EIndVoid = (motive) => ({ tag: 'EIndVoid', motive });
+exports.EIndVoid = EIndVoid;
 exports.VType = { tag: 'VType' };
 const VNe = (head, spine) => ({ tag: 'VNe', head, spine });
 exports.VNe = VNe;
@@ -1746,6 +1773,12 @@ const vapp = (left, right) => {
     return utils_1.impossible(`vapp: ${left.tag}`);
 };
 exports.vapp = vapp;
+const vindvoid = (motive, scrut) => {
+    if (scrut.tag === 'VNe')
+        return exports.VNe(scrut.head, list_1.Cons(exports.EIndVoid(motive), scrut.spine));
+    return utils_1.impossible(`vindvoid: ${scrut.tag}`);
+};
+exports.vindvoid = vindvoid;
 const evaluate = (t, vs) => {
     if (t.tag === 'Type')
         return exports.VType;
@@ -1773,6 +1806,8 @@ const evaluate = (t, vs) => {
         return exports.VSum(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
     if (t.tag === 'Inj')
         return exports.VInj(t.which, exports.evaluate(t.left, vs), exports.evaluate(t.right, vs), exports.evaluate(t.val, vs));
+    if (t.tag === 'IndVoid')
+        return exports.vindvoid(exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs));
     return t;
 };
 exports.evaluate = evaluate;
@@ -1784,7 +1819,9 @@ const quoteHead = (h, k) => {
 const quoteElim = (t, e, k) => {
     if (e.tag === 'EApp')
         return core_1.App(t, exports.quote(e.arg, k));
-    return e.tag;
+    if (e.tag === 'EIndVoid')
+        return core_1.IndVoid(exports.quote(e.motive, k), t);
+    return e;
 };
 const quote = (v, k) => {
     if (v.tag === 'VType')
@@ -1936,6 +1973,11 @@ const synth = (local, tm) => {
         const vright = values_1.evaluate(tm.right, local.vs);
         const u = check(local, tm.val, tm.which === 'Left' ? vleft : vright);
         return [values_1.VSum(vleft, vright), u];
+    }
+    if (tm.tag === 'IndVoid') {
+        check(local, tm.motive, V.VPi(usage_1.UsageRig.default, '_', V.VVoid, _ => values_1.VType));
+        const u = check(local, tm.scrut, V.VVoid);
+        return [V.vapp(values_1.evaluate(tm.motive, local.vs), values_1.evaluate(tm.scrut, local.vs)), u];
     }
     return utils_1.terr(`unable to synth ${core_1.show(tm)}`);
 };
