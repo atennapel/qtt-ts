@@ -1,4 +1,4 @@
-import { Abs, App, Pi, Term, Type, Var, UnitType, Unit, Sigma, Pair } from './core';
+import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
@@ -21,7 +21,7 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VType | VNe | VAbs | VPi | VUnitType | VUnit | VSigma | VPair;
+export type Val = VType | VNe | VAbs | VPi | VVoid | VUnitType | VUnit | VSigma | VPair;
 
 export interface VType { readonly tag: 'VType' }
 export const VType: VType = { tag: 'VType' };
@@ -31,6 +31,8 @@ export interface VAbs { readonly tag: 'VAbs'; readonly usage: Usage; readonly na
 export const VAbs = (usage: Usage, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', usage, name, type, clos });
 export interface VPi { readonly tag: 'VPi'; readonly usage: Usage; readonly name: Name; readonly type: Val; readonly clos: Clos }
 export const VPi = (usage: Usage, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', usage, name, type, clos });
+export interface VVoid { readonly tag: 'VVoid' }
+export const VVoid: VVoid = { tag: 'VVoid' };
 export interface VUnitType { readonly tag: 'VUnitType' }
 export const VUnitType: VUnitType = { tag: 'VUnitType' };
 export interface VUnit { readonly tag: 'VUnit' }
@@ -54,6 +56,7 @@ export const vapp = (left: Val, right: Val): Val => {
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType;
+  if (t.tag === 'Void') return VVoid;
   if (t.tag === 'UnitType') return VUnitType;
   if (t.tag === 'Unit') return VUnit;
   if (t.tag === 'Abs')
@@ -83,6 +86,7 @@ const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
 };
 export const quote = (v: Val, k: Ix): Term => {
   if (v.tag === 'VType') return Type;
+  if (v.tag === 'VVoid') return Void;
   if (v.tag === 'VUnitType') return UnitType;
   if (v.tag === 'VUnit') return Unit;
   if (v.tag === 'VNe')

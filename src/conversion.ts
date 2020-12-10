@@ -17,6 +17,7 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
 export const conv = (k: Ix, a: Val, b: Val): void => {
   log(() => `conv(${k}): ${show(a, k)} ~ ${show(b, k)}`);
   if (a === b) return;
+  if (a.tag === 'VVoid' && b.tag === 'VVoid') return;
   if (a.tag === 'VUnitType' && b.tag === 'VUnitType') return;
   if (a.tag === 'VUnit' && b.tag === 'VUnit') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.usage === b.usage) {

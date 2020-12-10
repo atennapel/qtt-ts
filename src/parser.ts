@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -194,6 +194,7 @@ const expr = (t: Token, fromRepl: boolean): [Term, boolean] => {
   if (t.tag === 'Name') {
     const x = t.name;
     if (x === 'Type') return [Type, false];
+    if (x === 'Void') return [Void, false];
     if (x === '*') return [Unit, false];
     if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);

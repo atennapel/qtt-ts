@@ -52,6 +52,7 @@ const check = (local: Local, tm: Term, ty: Val): Uses => {
 const synth = (local: Local, tm: Term): [Val, Uses] => {
   log(() => `synth ${show(tm)}`);
   if (tm.tag === 'Type') return [VType, noUses(local.level)];
+  if (tm.tag === 'Void') return [VType, noUses(local.level)];
   if (tm.tag === 'UnitType') return [VType, noUses(local.level)];
   if (tm.tag === 'Unit') return [VUnitType, noUses(local.level)];
   if (tm.tag === 'Var') {

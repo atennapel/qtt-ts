@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Let, Pair, Pi, Sigma, Term, Type, Unit, UnitType, Var } from './core';
+import { Abs, App, Let, Pair, Pi, Sigma, Term, Type, Unit, UnitType, Var, Void } from './core';
 import { Ix, Name } from './names';
 import { Cons, indexOf, List, Nil, uncons, updateAt } from './utils/list';
 import { terr, tryT } from './utils/utils';
@@ -44,6 +44,7 @@ const showVal = (local: Local, val: Val): string => S.showVal(val, local.level, 
 const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
   log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
   if (tm.tag === 'Type' && ty.tag === 'VType') return [Type, noUses(local.level)];
+  if (tm.tag === 'Void' && ty.tag === 'VType') return [Void, noUses(local.level)];
   if (tm.tag === 'UnitType' && ty.tag === 'VType') return [UnitType, noUses(local.level)];
   if (tm.tag === 'Unit' && ty.tag === 'VUnitType') return [Unit, noUses(local.level)];
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
@@ -91,6 +92,7 @@ const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
 const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
   log(() => `synth ${show(tm)}`);
   if (tm.tag === 'Type') return [Type, VType, noUses(local.level)];
+  if (tm.tag === 'Void') return [Void, VType, noUses(local.level)];
   if (tm.tag === 'UnitType') return [UnitType, VType, noUses(local.level)];
   if (tm.tag === 'Unit') return [Unit, VUnitType, noUses(local.level)];
   if (tm.tag === 'Var') {

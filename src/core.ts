@@ -12,13 +12,15 @@ t ::=
   t t                 -- application
   let u x : t = t; t  -- let
 
+  Void                -- void/empty type
+
   ()                  -- unit type
   *                   -- unit value
 
   (x : t) ** t        -- sigma/pair type
   (t, t : t)          -- pair
 */
-export type Term = Type | Var | Pi | Abs | App | Let | UnitType | Unit | Sigma | Pair;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | UnitType | Unit | Sigma | Pair;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -32,6 +34,8 @@ export interface App { readonly tag: 'App'; readonly fn: Term; readonly arg: Ter
 export const App = (fn: Term, arg: Term): App => ({ tag: 'App', fn, arg });
 export interface Let { readonly usage: Usage; readonly tag: 'Let'; readonly name: Name; readonly type: Term; readonly val: Term; readonly body: Term }
 export const Let = (usage: Usage, name: Name, type: Term, val: Term, body: Term): Let => ({ tag: 'Let', usage, name, type, val, body });
+export interface Void { readonly tag: 'Void' }
+export const Void: Void = { tag: 'Void' };
 export interface UnitType { readonly tag: 'UnitType' }
 export const UnitType: UnitType = { tag: 'UnitType' };
 export interface Unit { readonly tag: 'Unit' }
@@ -91,6 +95,7 @@ const showP = (b: boolean, t: Term) => b ? `(${show(t)})` : show(t);
 const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair'; 
 export const show = (t: Term): string => {
   if (t.tag === 'Type') return 'Type';
+  if (t.tag === 'Void') return 'Void';
   if (t.tag === 'UnitType') return '()';
   if (t.tag === 'Unit') return '*';
   if (t.tag === 'Var') return `${t.index}`;

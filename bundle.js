@@ -44,6 +44,8 @@ const conv = (k, a, b) => {
     config_1.log(() => `conv(${k}): ${values_1.show(a, k)} ~ ${values_1.show(b, k)}`);
     if (a === b)
         return;
+    if (a.tag === 'VVoid' && b.tag === 'VVoid')
+        return;
     if (a.tag === 'VUnitType' && b.tag === 'VUnitType')
         return;
     if (a.tag === 'VUnit' && b.tag === 'VUnit')
@@ -95,7 +97,7 @@ exports.conv = conv;
 },{"./config":1,"./utils/list":11,"./utils/utils":12,"./values":13}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const usage_1 = require("./usage");
 exports.Type = { tag: 'Type' };
 const Var = (index) => ({ tag: 'Var', index });
@@ -108,6 +110,7 @@ const App = (fn, arg) => ({ tag: 'App', fn, arg });
 exports.App = App;
 const Let = (usage, name, type, val, body) => ({ tag: 'Let', usage, name, type, val, body });
 exports.Let = Let;
+exports.Void = { tag: 'Void' };
 exports.UnitType = { tag: 'UnitType' };
 exports.Unit = { tag: 'Unit' };
 const Sigma = (usage, name, type, body) => ({ tag: 'Sigma', usage, name, type, body });
@@ -169,6 +172,8 @@ const isSimple = (t) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'UnitTy
 const show = (t) => {
     if (t.tag === 'Type')
         return 'Type';
+    if (t.tag === 'Void')
+        return 'Void';
     if (t.tag === 'UnitType')
         return '()';
     if (t.tag === 'Unit')
@@ -240,6 +245,8 @@ const check = (local, tm, ty) => {
     config_1.log(() => `check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
     if (tm.tag === 'Type' && ty.tag === 'VType')
         return [core_1.Type, usage_1.noUses(local.level)];
+    if (tm.tag === 'Void' && ty.tag === 'VType')
+        return [core_1.Void, usage_1.noUses(local.level)];
     if (tm.tag === 'UnitType' && ty.tag === 'VType')
         return [core_1.UnitType, usage_1.noUses(local.level)];
     if (tm.tag === 'Unit' && ty.tag === 'VUnitType')
@@ -290,6 +297,8 @@ const synth = (local, tm) => {
     config_1.log(() => `synth ${surface_1.show(tm)}`);
     if (tm.tag === 'Type')
         return [core_1.Type, values_1.VType, usage_1.noUses(local.level)];
+    if (tm.tag === 'Void')
+        return [core_1.Void, values_1.VType, usage_1.noUses(local.level)];
     if (tm.tag === 'UnitType')
         return [core_1.UnitType, values_1.VType, usage_1.noUses(local.level)];
     if (tm.tag === 'Unit')
@@ -630,6 +639,8 @@ const expr = (t, fromRepl) => {
         const x = t.name;
         if (x === 'Type')
             return [surface_1.Type, false];
+        if (x === 'Void')
+            return [surface_1.Void, false];
         if (x === '*')
             return [surface_1.Unit, false];
         if (/[a-z]/i.test(x[0]))
@@ -1148,7 +1159,7 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":9,"./values":13,"./verification":14}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Pair = exports.Sigma = exports.Unit = exports.UnitType = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const names_1 = require("./names");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
@@ -1165,6 +1176,7 @@ const App = (fn, arg) => ({ tag: 'App', fn, arg });
 exports.App = App;
 const Let = (usage, name, type, val, body) => ({ tag: 'Let', usage, name, type, val, body });
 exports.Let = Let;
+exports.Void = { tag: 'Void' };
 exports.UnitType = { tag: 'UnitType' };
 exports.Unit = { tag: 'Unit' };
 const Sigma = (usage, name, type, body) => ({ tag: 'Sigma', usage, name, type, body });
@@ -1226,6 +1238,8 @@ const isSimple = (t) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'UnitTy
 const show = (t) => {
     if (t.tag === 'Type')
         return 'Type';
+    if (t.tag === 'Void')
+        return 'Void';
     if (t.tag === 'UnitType')
         return '()';
     if (t.tag === 'Unit')
@@ -1260,6 +1274,8 @@ exports.show = show;
 const fromCore = (t, ns = list_1.Nil) => {
     if (t.tag === 'Type')
         return exports.Type;
+    if (t.tag === 'Void')
+        return exports.Void;
     if (t.tag === 'UnitType')
         return exports.UnitType;
     if (t.tag === 'Unit')
@@ -1596,7 +1612,7 @@ exports.eqArr = eqArr;
 },{"fs":16}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vapp = exports.vinst = exports.VVar = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EApp = exports.HVar = void 0;
+exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vapp = exports.vinst = exports.VVar = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EApp = exports.HVar = void 0;
 const core_1 = require("./core");
 const C = require("./core");
 const list_1 = require("./utils/list");
@@ -1612,6 +1628,7 @@ const VAbs = (usage, name, type, clos) => ({ tag: 'VAbs', usage, name, type, clo
 exports.VAbs = VAbs;
 const VPi = (usage, name, type, clos) => ({ tag: 'VPi', usage, name, type, clos });
 exports.VPi = VPi;
+exports.VVoid = { tag: 'VVoid' };
 exports.VUnitType = { tag: 'VUnitType' };
 exports.VUnit = { tag: 'VUnit' };
 const VSigma = (usage, name, type, clos) => ({ tag: 'VSigma', usage, name, type, clos });
@@ -1633,6 +1650,8 @@ exports.vapp = vapp;
 const evaluate = (t, vs) => {
     if (t.tag === 'Type')
         return exports.VType;
+    if (t.tag === 'Void')
+        return exports.VVoid;
     if (t.tag === 'UnitType')
         return exports.VUnitType;
     if (t.tag === 'Unit')
@@ -1667,6 +1686,8 @@ const quoteElim = (t, e, k) => {
 const quote = (v, k) => {
     if (v.tag === 'VType')
         return core_1.Type;
+    if (v.tag === 'VVoid')
+        return core_1.Void;
     if (v.tag === 'VUnitType')
         return core_1.UnitType;
     if (v.tag === 'VUnit')
@@ -1735,6 +1756,8 @@ const check = (local, tm, ty) => {
 const synth = (local, tm) => {
     config_1.log(() => `synth ${core_1.show(tm)}`);
     if (tm.tag === 'Type')
+        return [values_1.VType, usage_1.noUses(local.level)];
+    if (tm.tag === 'Void')
         return [values_1.VType, usage_1.noUses(local.level)];
     if (tm.tag === 'UnitType')
         return [values_1.VType, usage_1.noUses(local.level)];
