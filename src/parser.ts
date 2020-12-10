@@ -2,7 +2,7 @@ import { serr } from './utils/utils';
 import { Term, Var, App, Abs, Pi, Let, Type, show } from './surface';
 import { Name } from './names';
 import { log } from './config';
-import { Usage } from './usage';
+import { Usage, UsageRig } from './usage';
 
 type BracketO = '(' | '{'
 type Bracket = BracketO | ')' | '}';
@@ -24,7 +24,7 @@ const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list, bracket });
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
-const SYM1: string[] = ['\\', ':', '=', ';'];
+const SYM1: string[] = ['\\', ':', '=', ';', '*'];
 const SYM2: string[] = ['->'];
 
 const START = 0;
@@ -113,22 +113,25 @@ const splitTokens = (a: Token[], fn: (t: Token) => boolean, keepSymbol: boolean 
   return r;
 };
 
+const usage = (t: Token): Usage | null => {
+  if (t.tag === 'Name' && Usage.includes(t.name)) return t.name as Usage;
+  if (t.tag === 'Num' && Usage.includes(t.num)) return t.num as Usage;
+  return null;
+};
+
 const lambdaParams = (t: Token, fromRepl: boolean): [Usage, Name, boolean, Term | null][] => {
-  if (t.tag === 'Name') return [['*', t.name, false, null]];
+  if (t.tag === 'Name') return [[UsageRig.default, t.name, false, null]];
   if (t.tag === 'List') {
     const impl = t.bracket === '{';
     const a = t.list;
-    if (a.length === 0) return [['*', '_', impl, tunit]];
+    if (a.length === 0) return [[UsageRig.default, '_', impl, tunit]];
     const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
-    if (i === -1) return isNames(a).map(x => ['*', x, impl, null]);
+    if (i === -1) return isNames(a).map(x => [UsageRig.default, x, impl, null]);
     let start = 0;
     const n = a[0];
-    let u: Usage = '*';
-    if (n.tag === 'Num') {
-      if (n.num !== '0' && n.num !== '1') return serr(`invalid usage ${n.num} in lambda`);
-      u = n.num as '0' | '1';
-      start = 1;
-    }
+    const pu = usage(n);
+    let u: Usage = UsageRig.default;
+    if (pu !== null) { u = pu; start = 1 }
     const ns = a.slice(start, i);
     const rest = a.slice(i + 1);
     const ty = exprs(rest, '(', fromRepl);
@@ -137,21 +140,18 @@ const lambdaParams = (t: Token, fromRepl: boolean): [Usage, Name, boolean, Term 
   return serr(`invalid lambda param`);
 };
 const piParams = (t: Token, fromRepl: boolean): [Usage, Name, boolean, Term][] => {
-  if (t.tag === 'Name') return [['*', '_', false, expr(t, fromRepl)[0]]];
+  if (t.tag === 'Name') return [[UsageRig.default, '_', false, expr(t, fromRepl)[0]]];
   if (t.tag === 'List') {
     const impl = t.bracket === '{';
     const a = t.list;
-    if (a.length === 0) return [['*', '_', impl, tunit]];
+    if (a.length === 0) return [[UsageRig.default, '_', impl, tunit]];
     const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
-    if (i === -1) return [['*', '_', impl, expr(t, fromRepl)[0]]];
+    if (i === -1) return [[UsageRig.default, '_', impl, expr(t, fromRepl)[0]]];
     let start = 0;
     const n = a[0];
-    let u: Usage = '*';
-    if (n.tag === 'Num') {
-      if (n.num !== '0' && n.num !== '1') return serr(`invalid usage ${n.num} in pi`);
-      u = n.num as '0' | '1';
-      start = 1;
-    }
+    const pu = usage(n);
+    let u: Usage = UsageRig.default;
+    if (pu !== null) { u = pu; start = 1 }
     const ns = a.slice(start, i);
     const rest = a.slice(i + 1);
     const ty = exprs(rest, '(', fromRepl);
@@ -233,13 +233,9 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
   if (isName(ts[0], 'let')) {
     let x = ts[1];
     let j = 2;
-    let u: Usage = '*';
-    if (x.tag === 'Num') {
-      if (x.num !== '0' && x.num !== '1') return serr(`invalid usage ${x.num} in let`);
-      u = x.num as '0' | '1';
-      x = ts[2];
-      j = 3;
-    }
+    const pu = usage(x);
+    let u: Usage = UsageRig.default;
+    if (pu !== null) { u = pu; x = ts[2]; j = 3 }
     let name = 'ERROR';
     if (x.tag === 'Name') {
       name = x.name;
@@ -287,7 +283,7 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
   if (i >= 0) {
     const a = ts.slice(0, i);
     const b = ts.slice(i + 1);
-    return Let('1', 'x', exprs(b, '(', fromRepl), exprs(a, '(', fromRepl), Var('x'));
+    return Let(UsageRig.default, 'x', exprs(b, '(', fromRepl), exprs(a, '(', fromRepl), Var('x'));
   }
   if (isName(ts[0], '\\')) {
     const args: [Usage, Name, boolean, Term | null][] = [];
@@ -310,7 +306,7 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
     const s = splitTokens(ts, x => isName(x, '->'));
     if (s.length < 2) return serr(`parsing failed with ->`);
     const args: [Usage, Name, boolean, Term][] = s.slice(0, -1)
-      .map(p => p.length === 1 ? piParams(p[0], fromRepl) : [['*', '_', false, exprs(p, '(', fromRepl)] as [Usage, Name, boolean, Term]])
+      .map(p => p.length === 1 ? piParams(p[0], fromRepl) : [[UsageRig.default, '_', false, exprs(p, '(', fromRepl)] as [Usage, Name, boolean, Term]])
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(', fromRepl);
     return args.reduceRight((x, [u, name, , ty]) => Pi(u, name, ty, x), body);

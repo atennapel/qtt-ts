@@ -4,9 +4,9 @@ Try it out at https://atennapel.github.io/qtt-ts
 
 References:
 - "Syntax and Semantics of Quantitative Type Theory"
-- "A graded dependent type system with a usage-aware semantics"
+- "A graded dependent type system with a usage-aware semantics", I followed the rules from here
 - See https://github.com/AndrasKovacs/elaboration-zoo for an explanation of how the typechecking algorithm works.
-- I used some of the rules from https://github.com/BramvanVeenschoten1/qtt for the implementation of QTT.
+- I used some of the rules from https://github.com/BramvanVeenschoten1/qtt
 
 Run CLI REPL:
 ```
@@ -21,7 +21,7 @@ yarn start example.p
 ```
 
 Notes:
-- this implements the 0, 1, unrestricted (which I denote with *) rig
+- this implements the 0, 1, unrestricted (which I denote with *) rig currently, but the typechecker can handle any partially ordered semiring
 - application does not have the usage annotation, these will be infered from the function type
 - lambda with unannotated usage will be * by default unless checked against a function type, then it will use the usage from the type
 

@@ -3,7 +3,7 @@ import * as C from './core';
 import { Cons, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
-import { Usage } from './usage';
+import { Usage, UsageRig } from './usage';
 
 export type Term = Type | Var | Pi | Abs | App | Let;
 
@@ -55,18 +55,18 @@ export const show = (t: Term): string => {
   if (t.tag === 'Type') return 'Type';
   if (t.tag === 'Pi') {
     const [params, ret] = flattenPi(t);
-    return `${params.map(([u, x, t]) => u === '*' && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === '*' ? '' : `${u} `}${x} : ${show(t)})`).join(' -> ')} -> ${show(ret)}`;
+    return `${params.map(([u, x, t]) => u === UsageRig.default && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === UsageRig.default ? '' : `${u} `}${x} : ${show(t)})`).join(' -> ')} -> ${show(ret)}`;
   }
   if (t.tag === 'Abs') {
     const [params, body] = flattenAbs(t);
-    return `\\${params.map(([u, x, t]) => t ? `(${u === '*' ? '' : `${u} `}${x} : ${show(t)})` : x).join(' ')}. ${show(body)}`;
+    return `\\${params.map(([u, x, t]) => t ? `(${u === UsageRig.default ? '' : `${u} `}${x} : ${show(t)})` : x).join(' ')}. ${show(body)}`;
   }
   if (t.tag === 'App') {
     const [fn, args] = flattenApp(t);
     return `${showP(!isSimple(fn), fn)} ${args.map(t => showP(!isSimple(t), t)).join(' ')}`;
   }
   if (t.tag === 'Let')
-    return `let ${t.usage === '*' ? '' : `${t.usage} `}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
+    return `let ${t.usage === UsageRig.default ? '' : `${t.usage} `}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
   return t;
 };
 

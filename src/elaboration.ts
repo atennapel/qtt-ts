@@ -7,7 +7,7 @@ import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
-import { addUses, checkUse, multiplyUses, noUses, Usage, Uses } from './usage';
+import { addUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
 
 export type EntryT = { type: Val, usage: Usage };
 export const EntryT = (type: Val, usage: Usage): EntryT => ({ type, usage });
@@ -49,7 +49,7 @@ const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
     const x = tm.name;
     const [body, u] = check(localExtend(local, x, ty.type, ty.usage, v), tm.body, vinst(ty, v));
     const [ux, urest] = uncons(u);
-    if (!checkUse(ty.usage, ux))
+    if (!UsageRig.sub(ux, ty.usage))
       return terr(`usage error in ${show(tm)}: expected ${ty.usage} for ${x} but actual ${ux}`);
     return [Abs(ty.usage, x, quote(ty.type, local.level), body), urest];
   }
@@ -69,7 +69,7 @@ const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
     const v = evaluate(val, local.vs);
     const [body, ub] = check(localExtend(local, tm.name, vty, tm.usage, v), tm.body, ty);
     const [ux, urest] = uncons(ub);
-    if (!checkUse(tm.usage, ux))
+    if (!UsageRig.sub(ux, tm.usage))
       return terr(`usage error in ${show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
     return [Let(tm.usage, tm.name, vtype, val, body), addUses(multiplyUses(ux, uv), urest)];
   }
@@ -89,7 +89,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     if (i < 0) return terr(`undefined var ${tm.name}`);
     else {
       const [entry, j] = indexT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
-      const uses = updateAt(noUses(local.level), j, _ => '1' as Usage);
+      const uses = updateAt(noUses(local.level), j, _ => UsageRig.one);
       return [Var(j), entry.type, uses];
     }
   }
@@ -105,16 +105,17 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
       const [body, rty, u] = synth(localExtend(local, tm.name, ty, tm.usage), tm.body);
       const pi = evaluate(Pi(tm.usage, tm.name, type, quote(rty, local.level + 1)), local.vs);
       const [ux, urest] = uncons(u);
-      if (!checkUse(tm.usage, ux))
+      if (!UsageRig.sub(ux, tm.usage))
         return terr(`usage error in ${show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
       return [Abs(tm.usage, tm.name, type, body), pi, urest];
     } else terr(`cannot synth unannotated lambda: ${show(tm)}`);
   }
   if (tm.tag === 'Pi') {
-    const [type] = check(local, tm.type, VType);
+    const [type, u1] = check(local, tm.type, VType);
     const ty = evaluate(type, local.vs);
-    const [body] = check(localExtend(local, tm.name, ty, '0'), tm.body, VType);
-    return [Pi(tm.usage, tm.name, type, body), VType, noUses(local.level)];
+    const [body, u2] = check(localExtend(local, tm.name, ty, '0'), tm.body, VType);
+    const [, urest] = uncons(u2);
+    return [Pi(tm.usage, tm.name, type, body), VType, addUses(u1, urest)];
   }
   if (tm.tag === 'Let') {
     let type: Term;
@@ -132,7 +133,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     const v = evaluate(val, local.vs);
     const [body, rty, ub] = synth(localExtend(local, tm.name, ty, tm.usage, v), tm.body);
     const [ux, urest] = uncons(ub);
-    if (!checkUse(tm.usage, ux))
+    if (!UsageRig.sub(ux, tm.usage))
       return terr(`usage error in ${show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
     return [Let(tm.usage, tm.name, type, val, body), rty, addUses(multiplyUses(ux, uv), urest)];
   }

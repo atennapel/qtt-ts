@@ -67,10 +67,11 @@ const conv = (k, a, b) => {
 };
 exports.conv = conv;
 
-},{"./config":1,"./utils/list":10,"./utils/utils":11,"./values":12}],3:[function(require,module,exports){
+},{"./config":1,"./utils/list":11,"./utils/utils":12,"./values":13}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+const usage_1 = require("./usage");
 exports.Type = { tag: 'Type' };
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
@@ -121,23 +122,23 @@ const show = (t) => {
         return 'Type';
     if (t.tag === 'Pi') {
         const [params, ret] = exports.flattenPi(t);
-        return `${params.map(([u, x, t]) => u === '*' && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === '*' ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' -> ')} -> ${exports.show(ret)}`;
+        return `${params.map(([u, x, t]) => u === usage_1.UsageRig.default && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === usage_1.UsageRig.default ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' -> ')} -> ${exports.show(ret)}`;
     }
     if (t.tag === 'Abs') {
         const [params, body] = exports.flattenAbs(t);
-        return `\\${params.map(([u, x, t]) => `(${u === '*' ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' ')}. ${exports.show(body)}`;
+        return `\\${params.map(([u, x, t]) => `(${u === usage_1.UsageRig.default ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' ')}. ${exports.show(body)}`;
     }
     if (t.tag === 'App') {
         const [fn, args] = exports.flattenApp(t);
         return `${showP(!isSimple(fn), fn)} ${args.map(t => showP(!isSimple(t), t)).join(' ')}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.usage === '*' ? '' : `${t.usage} `}${t.name} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
+        return `let ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${t.name} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
     return t;
 };
 exports.show = show;
 
-},{}],4:[function(require,module,exports){
+},{"./usage":10}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.elaborate = exports.unsafeLocalPop = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
@@ -181,7 +182,7 @@ const check = (local, tm, ty) => {
         const x = tm.name;
         const [body, u] = check(exports.localExtend(local, x, ty.type, ty.usage, v), tm.body, values_1.vinst(ty, v));
         const [ux, urest] = list_1.uncons(u);
-        if (!usage_1.checkUse(ty.usage, ux))
+        if (!usage_1.UsageRig.sub(ux, ty.usage))
             return utils_1.terr(`usage error in ${surface_1.show(tm)}: expected ${ty.usage} for ${x} but actual ${ux}`);
         return [core_1.Abs(ty.usage, x, values_1.quote(ty.type, local.level), body), urest];
     }
@@ -202,7 +203,7 @@ const check = (local, tm, ty) => {
         const v = values_1.evaluate(val, local.vs);
         const [body, ub] = check(exports.localExtend(local, tm.name, vty, tm.usage, v), tm.body, ty);
         const [ux, urest] = list_1.uncons(ub);
-        if (!usage_1.checkUse(tm.usage, ux))
+        if (!usage_1.UsageRig.sub(ux, tm.usage))
             return utils_1.terr(`usage error in ${surface_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
         return [core_1.Let(tm.usage, tm.name, vtype, val, body), usage_1.addUses(usage_1.multiplyUses(ux, uv), urest)];
     }
@@ -223,7 +224,7 @@ const synth = (local, tm) => {
             return utils_1.terr(`undefined var ${tm.name}`);
         else {
             const [entry, j] = indexT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
-            const uses = list_1.updateAt(usage_1.noUses(local.level), j, _ => '1');
+            const uses = list_1.updateAt(usage_1.noUses(local.level), j, _ => usage_1.UsageRig.one);
             return [core_1.Var(j), entry.type, uses];
         }
     }
@@ -239,7 +240,7 @@ const synth = (local, tm) => {
             const [body, rty, u] = synth(exports.localExtend(local, tm.name, ty, tm.usage), tm.body);
             const pi = values_1.evaluate(core_1.Pi(tm.usage, tm.name, type, values_1.quote(rty, local.level + 1)), local.vs);
             const [ux, urest] = list_1.uncons(u);
-            if (!usage_1.checkUse(tm.usage, ux))
+            if (!usage_1.UsageRig.sub(ux, tm.usage))
                 return utils_1.terr(`usage error in ${surface_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
             return [core_1.Abs(tm.usage, tm.name, type, body), pi, urest];
         }
@@ -247,10 +248,11 @@ const synth = (local, tm) => {
             utils_1.terr(`cannot synth unannotated lambda: ${surface_1.show(tm)}`);
     }
     if (tm.tag === 'Pi') {
-        const [type] = check(local, tm.type, values_1.VType);
+        const [type, u1] = check(local, tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const [body] = check(exports.localExtend(local, tm.name, ty, '0'), tm.body, values_1.VType);
-        return [core_1.Pi(tm.usage, tm.name, type, body), values_1.VType, usage_1.noUses(local.level)];
+        const [body, u2] = check(exports.localExtend(local, tm.name, ty, '0'), tm.body, values_1.VType);
+        const [, urest] = list_1.uncons(u2);
+        return [core_1.Pi(tm.usage, tm.name, type, body), values_1.VType, usage_1.addUses(u1, urest)];
     }
     if (tm.tag === 'Let') {
         let type;
@@ -269,7 +271,7 @@ const synth = (local, tm) => {
         const v = values_1.evaluate(val, local.vs);
         const [body, rty, ub] = synth(exports.localExtend(local, tm.name, ty, tm.usage, v), tm.body);
         const [ux, urest] = list_1.uncons(ub);
-        if (!usage_1.checkUse(tm.usage, ux))
+        if (!usage_1.UsageRig.sub(ux, tm.usage))
             return utils_1.terr(`usage error in ${surface_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
         return [core_1.Let(tm.usage, tm.name, type, val, body), rty, usage_1.addUses(usage_1.multiplyUses(ux, uv), urest)];
     }
@@ -292,7 +294,7 @@ const elaborate = (t, local = exports.localEmpty) => {
 };
 exports.elaborate = elaborate;
 
-},{"./config":1,"./conversion":2,"./core":3,"./surface":8,"./usage":9,"./utils/list":10,"./utils/utils":11,"./values":12}],5:[function(require,module,exports){
+},{"./config":1,"./conversion":2,"./core":3,"./surface":9,"./usage":10,"./utils/list":11,"./utils/utils":12,"./values":13}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chooseName = exports.nextName = void 0;
@@ -309,13 +311,14 @@ exports.nextName = nextName;
 const chooseName = (x, ns) => x === '_' ? x : list_1.contains(ns, x) ? exports.chooseName(exports.nextName(x), ns) : x;
 exports.chooseName = chooseName;
 
-},{"./utils/list":10}],6:[function(require,module,exports){
+},{"./utils/list":11}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parse = void 0;
 const utils_1 = require("./utils/utils");
 const surface_1 = require("./surface");
 const config_1 = require("./config");
+const usage_1 = require("./usage");
 const matchingBracket = (c) => {
     if (c === '(')
         return ')';
@@ -331,7 +334,7 @@ const TName = (name) => ({ tag: 'Name', name });
 const TNum = (num) => ({ tag: 'Num', num });
 const TList = (list, bracket) => ({ tag: 'List', list, bracket });
 const TStr = (str) => ({ tag: 'Str', str });
-const SYM1 = ['\\', ':', '=', ';'];
+const SYM1 = ['\\', ':', '=', ';', '*'];
 const SYM2 = ['->'];
 const START = 0;
 const NAME = 1;
@@ -443,24 +446,30 @@ const splitTokens = (a, fn, keepSymbol = false) => {
     r.push(t);
     return r;
 };
+const usage = (t) => {
+    if (t.tag === 'Name' && usage_1.Usage.includes(t.name))
+        return t.name;
+    if (t.tag === 'Num' && usage_1.Usage.includes(t.num))
+        return t.num;
+    return null;
+};
 const lambdaParams = (t, fromRepl) => {
     if (t.tag === 'Name')
-        return [['*', t.name, false, null]];
+        return [[usage_1.UsageRig.default, t.name, false, null]];
     if (t.tag === 'List') {
         const impl = t.bracket === '{';
         const a = t.list;
         if (a.length === 0)
-            return [['*', '_', impl, tunit]];
+            return [[usage_1.UsageRig.default, '_', impl, tunit]];
         const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
         if (i === -1)
-            return isNames(a).map(x => ['*', x, impl, null]);
+            return isNames(a).map(x => [usage_1.UsageRig.default, x, impl, null]);
         let start = 0;
         const n = a[0];
-        let u = '*';
-        if (n.tag === 'Num') {
-            if (n.num !== '0' && n.num !== '1')
-                return utils_1.serr(`invalid usage ${n.num} in lambda`);
-            u = n.num;
+        const pu = usage(n);
+        let u = usage_1.UsageRig.default;
+        if (pu !== null) {
+            u = pu;
             start = 1;
         }
         const ns = a.slice(start, i);
@@ -472,22 +481,21 @@ const lambdaParams = (t, fromRepl) => {
 };
 const piParams = (t, fromRepl) => {
     if (t.tag === 'Name')
-        return [['*', '_', false, expr(t, fromRepl)[0]]];
+        return [[usage_1.UsageRig.default, '_', false, expr(t, fromRepl)[0]]];
     if (t.tag === 'List') {
         const impl = t.bracket === '{';
         const a = t.list;
         if (a.length === 0)
-            return [['*', '_', impl, tunit]];
+            return [[usage_1.UsageRig.default, '_', impl, tunit]];
         const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
         if (i === -1)
-            return [['*', '_', impl, expr(t, fromRepl)[0]]];
+            return [[usage_1.UsageRig.default, '_', impl, expr(t, fromRepl)[0]]];
         let start = 0;
         const n = a[0];
-        let u = '*';
-        if (n.tag === 'Num') {
-            if (n.num !== '0' && n.num !== '1')
-                return utils_1.serr(`invalid usage ${n.num} in pi`);
-            u = n.num;
+        const pu = usage(n);
+        let u = usage_1.UsageRig.default;
+        if (pu !== null) {
+            u = pu;
             start = 1;
         }
         const ns = a.slice(start, i);
@@ -581,11 +589,10 @@ const exprs = (ts, br, fromRepl) => {
     if (isName(ts[0], 'let')) {
         let x = ts[1];
         let j = 2;
-        let u = '*';
-        if (x.tag === 'Num') {
-            if (x.num !== '0' && x.num !== '1')
-                return utils_1.serr(`invalid usage ${x.num} in let`);
-            u = x.num;
+        const pu = usage(x);
+        let u = usage_1.UsageRig.default;
+        if (pu !== null) {
+            u = pu;
             x = ts[2];
             j = 3;
         }
@@ -645,7 +652,7 @@ const exprs = (ts, br, fromRepl) => {
     if (i >= 0) {
         const a = ts.slice(0, i);
         const b = ts.slice(i + 1);
-        return surface_1.Let('1', 'x', exprs(b, '(', fromRepl), exprs(a, '(', fromRepl), surface_1.Var('x'));
+        return surface_1.Let(usage_1.UsageRig.default, 'x', exprs(b, '(', fromRepl), exprs(a, '(', fromRepl), surface_1.Var('x'));
     }
     if (isName(ts[0], '\\')) {
         const args = [];
@@ -670,7 +677,7 @@ const exprs = (ts, br, fromRepl) => {
         if (s.length < 2)
             return utils_1.serr(`parsing failed with ->`);
         const args = s.slice(0, -1)
-            .map(p => p.length === 1 ? piParams(p[0], fromRepl) : [['*', '_', false, exprs(p, '(', fromRepl)]])
+            .map(p => p.length === 1 ? piParams(p[0], fromRepl) : [[usage_1.UsageRig.default, '_', false, exprs(p, '(', fromRepl)]])
             .reduce((x, y) => x.concat(y), []);
         const body = exprs(s[s.length - 1], '(', fromRepl);
         return args.reduceRight((x, [u, name, , ty]) => surface_1.Pi(u, name, ty, x), body);
@@ -700,7 +707,82 @@ const parse = (s, fromRepl = false) => {
 };
 exports.parse = parse;
 
-},{"./config":1,"./surface":8,"./utils/utils":11}],7:[function(require,module,exports){
+},{"./config":1,"./surface":9,"./usage":10,"./utils/utils":12}],7:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.linear = exports.Lin = exports.bool = exports.Bool = exports.trivial = exports.Triv = exports.lubUsesRig = exports.multiplyUsesRig = exports.addUsesRig = exports.noUsesRig = void 0;
+const list_1 = require("./utils/list");
+const noUsesRig = (rig, size) => list_1.map(list_1.range(size), () => rig.zero);
+exports.noUsesRig = noUsesRig;
+const addUsesRig = (rig, a, b) => list_1.zipWith(rig.add, a, b);
+exports.addUsesRig = addUsesRig;
+const multiplyUsesRig = (rig, a, b) => list_1.map(b, x => rig.multiply(a, x));
+exports.multiplyUsesRig = multiplyUsesRig;
+const lubUsesRig = (rig, a, b) => {
+    const l = list_1.zipWith(rig.lub, a, b);
+    return list_1.and(list_1.map(l, x => x !== null)) ? l : null;
+};
+exports.lubUsesRig = lubUsesRig;
+exports.Triv = ['1'];
+exports.trivial = {
+    zero: '1',
+    one: '1',
+    default: '1',
+    add(_a, _b) { return '1'; },
+    multiply(_a, _b) { return '1'; },
+    sub(_a, _b) { return true; },
+    lub(_a, _b) { return '1'; },
+};
+exports.Bool = ['0', '*'];
+exports.bool = {
+    zero: '0',
+    one: '*',
+    default: '*',
+    add(a, b) { return (a === '*') || (b === '*') ? '*' : '0'; },
+    multiply(a, b) { return (a === '*') && (b === '*') ? '*' : '0'; },
+    sub(a, b) { return !((a === '*') && !(b === '*')); },
+    lub(a, b) { return (a === '*') || (b === '*') ? '*' : '0'; },
+};
+exports.Lin = ['0', '1', '*'];
+exports.linear = {
+    zero: '0',
+    one: '1',
+    default: '*',
+    add(a, b) {
+        if (a === '*' || b === '*')
+            return '*';
+        if (a === '1' && b === '1')
+            return '*';
+        if (a === '1' || b === '1')
+            return '1';
+        return '0';
+    },
+    multiply(a, b) {
+        if (a === '0' || b === '0')
+            return '0';
+        if (a === '1')
+            return b;
+        if (b === '1')
+            return a;
+        return '*';
+    },
+    sub(a, b) {
+        if (a === b)
+            return true;
+        if (a === '0' && b === '*')
+            return true;
+        if (a === '1' && b === '*')
+            return true;
+        return false;
+    },
+    lub(a, b) {
+        if (a === b)
+            return a;
+        return '*';
+    },
+};
+
+},{"./utils/list":11}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runREPL = exports.initREPL = void 0;
@@ -812,7 +894,7 @@ const runREPL = (s_, cb) => {
 };
 exports.runREPL = runREPL;
 
-},{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":8,"./values":12,"./verification":13}],8:[function(require,module,exports){
+},{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":9,"./values":13,"./verification":14}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
@@ -820,6 +902,7 @@ const names_1 = require("./names");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
+const usage_1 = require("./usage");
 exports.Type = { tag: 'Type' };
 const Var = (name) => ({ tag: 'Var', name });
 exports.Var = Var;
@@ -870,18 +953,18 @@ const show = (t) => {
         return 'Type';
     if (t.tag === 'Pi') {
         const [params, ret] = exports.flattenPi(t);
-        return `${params.map(([u, x, t]) => u === '*' && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === '*' ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' -> ')} -> ${exports.show(ret)}`;
+        return `${params.map(([u, x, t]) => u === usage_1.UsageRig.default && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === usage_1.UsageRig.default ? '' : `${u} `}${x} : ${exports.show(t)})`).join(' -> ')} -> ${exports.show(ret)}`;
     }
     if (t.tag === 'Abs') {
         const [params, body] = exports.flattenAbs(t);
-        return `\\${params.map(([u, x, t]) => t ? `(${u === '*' ? '' : `${u} `}${x} : ${exports.show(t)})` : x).join(' ')}. ${exports.show(body)}`;
+        return `\\${params.map(([u, x, t]) => t ? `(${u === usage_1.UsageRig.default ? '' : `${u} `}${x} : ${exports.show(t)})` : x).join(' ')}. ${exports.show(body)}`;
     }
     if (t.tag === 'App') {
         const [fn, args] = exports.flattenApp(t);
         return `${showP(!isSimple(fn), fn)} ${args.map(t => showP(!isSimple(t), t)).join(' ')}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.usage === '*' ? '' : `${t.usage} `}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
+        return `let ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
     return t;
 };
 exports.show = show;
@@ -912,47 +995,23 @@ exports.showCore = showCore;
 const showVal = (v, k = 0, ns = list_1.Nil) => exports.show(exports.fromCore(values_1.quote(v, k), ns));
 exports.showVal = showVal;
 
-},{"./names":5,"./utils/list":10,"./utils/utils":11,"./values":12}],9:[function(require,module,exports){
+},{"./names":5,"./usage":10,"./utils/list":11,"./utils/utils":12,"./values":13}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkUse = exports.multiplyUses = exports.addUses = exports.noUses = exports.add = exports.multiply = void 0;
-const list_1 = require("./utils/list");
-const multiply = (a, b) => {
-    if (a === '0' || b === '0')
-        return '0';
-    if (a === '1')
-        return b;
-    if (b === '1')
-        return a;
-    return '*';
-};
-exports.multiply = multiply;
-const add = (a, b) => {
-    if (a === '*' || b === '*')
-        return '*';
-    if (a === '0')
-        return b;
-    if (b === '0')
-        return b;
-    return '*';
-};
-exports.add = add;
-const noUses = (size) => list_1.map(list_1.range(size), _ => '0');
+exports.lubUses = exports.multiplyUses = exports.addUses = exports.noUses = exports.UsageRig = exports.Usage = void 0;
+const porig_1 = require("./porig");
+exports.Usage = porig_1.Lin;
+exports.UsageRig = porig_1.linear;
+const noUses = (size) => porig_1.noUsesRig(exports.UsageRig, size);
 exports.noUses = noUses;
-const addUses = (a, b) => list_1.zipWith(exports.add, a, b);
+const addUses = (a, b) => porig_1.addUsesRig(exports.UsageRig, a, b);
 exports.addUses = addUses;
-const multiplyUses = (a, b) => list_1.map(b, x => exports.multiply(a, x));
+const multiplyUses = (a, b) => porig_1.multiplyUsesRig(exports.UsageRig, a, b);
 exports.multiplyUses = multiplyUses;
-const checkUse = (ex, act) => {
-    if (ex === '0' && act !== '0')
-        return false;
-    if (ex === '1' && act !== '1')
-        return false;
-    return true;
-};
-exports.checkUse = checkUse;
+const lubUses = (a, b) => porig_1.lubUsesRig(exports.UsageRig, a, b);
+exports.lubUses = lubUses;
 
-},{"./utils/list":10}],10:[function(require,module,exports){
+},{"./porig":7}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.updateAt = exports.indexOfFn = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.uncons = exports.tail = exports.head = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
@@ -1152,7 +1211,7 @@ const last = (l) => {
 };
 exports.last = last;
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.eqArr = exports.mapObj = exports.tryTE = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
@@ -1235,7 +1294,7 @@ const eqArr = (a, b, eq = (x, y) => x === y) => {
 };
 exports.eqArr = eqArr;
 
-},{"fs":15}],12:[function(require,module,exports){
+},{"fs":16}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vapp = exports.vinst = exports.VVar = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EApp = exports.HVar = void 0;
@@ -1309,7 +1368,7 @@ exports.normalize = normalize;
 const show = (v, k) => C.show(exports.quote(v, k));
 exports.show = show;
 
-},{"./core":3,"./utils/list":10,"./utils/utils":11}],13:[function(require,module,exports){
+},{"./core":3,"./utils/list":11,"./utils/utils":12}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verify = exports.unsafeLocalPop = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
@@ -1358,7 +1417,7 @@ const synth = (local, tm) => {
         return [values_1.VType, usage_1.noUses(local.level)];
     if (tm.tag === 'Var') {
         const [entry, j] = indexT(local.ts, tm.index) || utils_1.terr(`var out of scope ${core_1.show(tm)}`);
-        const uses = list_1.updateAt(usage_1.noUses(local.level), j, _ => '1');
+        const uses = list_1.updateAt(usage_1.noUses(local.level), j, _ => usage_1.UsageRig.one);
         return [entry.type, uses];
     }
     if (tm.tag === 'App') {
@@ -1372,15 +1431,16 @@ const synth = (local, tm) => {
         const [rty, u] = synth(exports.localExtend(local, ty, tm.usage), tm.body);
         const pi = values_1.evaluate(core_1.Pi(tm.usage, tm.name, tm.type, values_1.quote(rty, local.level + 1)), local.vs);
         const [ux, urest] = list_1.uncons(u);
-        if (!usage_1.checkUse(tm.usage, ux))
+        if (!usage_1.UsageRig.sub(ux, tm.usage))
             return utils_1.terr(`usage error in ${core_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
         return [pi, urest];
     }
     if (tm.tag === 'Pi') {
-        check(local, tm.type, values_1.VType);
+        const u1 = check(local, tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(exports.localExtend(local, ty, '0'), tm.body, values_1.VType);
-        return [values_1.VType, usage_1.noUses(local.level)];
+        const u2 = check(exports.localExtend(local, ty, usage_1.UsageRig.default), tm.body, values_1.VType);
+        const [, urest] = list_1.uncons(u2);
+        return [values_1.VType, usage_1.addUses(u1, urest)];
     }
     if (tm.tag === 'Let') {
         check(local, tm.type, values_1.VType);
@@ -1389,7 +1449,7 @@ const synth = (local, tm) => {
         const v = values_1.evaluate(tm.val, local.vs);
         const [rty, ub] = synth(exports.localExtend(local, ty, tm.usage, v), tm.body);
         const [ux, urest] = list_1.uncons(ub);
-        if (!usage_1.checkUse(tm.usage, ux))
+        if (!usage_1.UsageRig.sub(ux, tm.usage))
             return utils_1.terr(`usage error in ${core_1.show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
         return [rty, usage_1.addUses(usage_1.multiplyUses(ux, uv), urest)];
     }
@@ -1412,7 +1472,7 @@ const verify = (t, local = exports.localEmpty) => {
 };
 exports.verify = verify;
 
-},{"./config":1,"./conversion":2,"./core":3,"./usage":9,"./utils/list":10,"./utils/utils":11,"./values":12}],14:[function(require,module,exports){
+},{"./config":1,"./conversion":2,"./core":3,"./usage":10,"./utils/list":11,"./utils/utils":12,"./values":13}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -1468,6 +1528,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":7}],15:[function(require,module,exports){
+},{"./repl":8}],16:[function(require,module,exports){
 
-},{}]},{},[14]);
+},{}]},{},[15]);

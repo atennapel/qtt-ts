@@ -6,7 +6,7 @@ import { terr, tryT } from './utils/utils';
 import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar } from './values';
 import * as V from './values';
 import { conv } from './conversion';
-import { addUses, checkUse, multiplyUses, noUses, Usage, Uses } from './usage';
+import { addUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
 
 export type EntryT = { type: Val, usage: Usage };
 export const EntryT = (type: Val, usage: Usage): EntryT => ({ type, usage });
@@ -54,7 +54,7 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
   if (tm.tag === 'Type') return [VType, noUses(local.level)];
   if (tm.tag === 'Var') {
     const [entry, j] = indexT(local.ts, tm.index) || terr(`var out of scope ${show(tm)}`);
-    const uses = updateAt(noUses(local.level), j, _ => '1' as Usage);
+    const uses = updateAt(noUses(local.level), j, _ => UsageRig.one);
     return [entry.type, uses];
   }
   if (tm.tag === 'App') {
@@ -68,15 +68,16 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     const [rty, u] = synth(localExtend(local, ty, tm.usage), tm.body);
     const pi = evaluate(Pi(tm.usage, tm.name, tm.type, quote(rty, local.level + 1)), local.vs);
     const [ux, urest] = uncons(u);
-    if (!checkUse(tm.usage, ux))
+    if (!UsageRig.sub(ux, tm.usage))
       return terr(`usage error in ${show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
     return [pi, urest];
   }
   if (tm.tag === 'Pi') {
-    check(local, tm.type, VType);
+    const u1 = check(local, tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
-    check(localExtend(local, ty, '0'), tm.body, VType);
-    return [VType, noUses(local.level)];
+    const u2 = check(localExtend(local, ty, UsageRig.default), tm.body, VType);
+    const [, urest] = uncons(u2);
+    return [VType, addUses(u1, urest)];
   }
   if (tm.tag === 'Let') {
     check(local, tm.type, VType);
@@ -85,7 +86,7 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     const v = evaluate(tm.val, local.vs);
     const [rty, ub] = synth(localExtend(local, ty, tm.usage, v), tm.body);
     const [ux, urest] = uncons(ub);
-    if (!checkUse(tm.usage, ux))
+    if (!UsageRig.sub(ux, tm.usage))
       return terr(`usage error in ${show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
     return [rty, addUses(multiplyUses(ux, uv), urest)];
   }
