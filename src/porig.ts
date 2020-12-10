@@ -39,6 +39,7 @@ export const lubUsesRig = <T>(rig: PORig<T>, a: UsesRig<T>, b: UsesRig<T>): Uses
   return and(map(l, x => x !== null)) ? l as UsesRig<T> : null;
 };
 
+// trivial semiring (regular dependent types)
 export type Triv = '1';
 export const Triv = ['1'];
 export const trivial : PORig<Triv> = {
@@ -51,6 +52,7 @@ export const trivial : PORig<Triv> = {
   lub(_a: '1', _b: '1') { return '1' },
 };
 
+// boolean semiring (0s must be unused, * may or may not be used)
 export type Bool = '0' | '*';
 export const Bool = ['0', '*'];
 export const bool : PORig<Bool> = {
@@ -59,10 +61,24 @@ export const bool : PORig<Bool> = {
   default: '*',
   add(a: Bool, b: Bool) { return (a === '*') || (b === '*') ? '*' : '0' },
   multiply(a: Bool, b: Bool) { return (a === '*') && (b === '*') ? '*' : '0' },
-  sub(a: Bool, b: Bool) { return !((a === '*') && !(b === '*')) },
-  lub(a: Bool, b: Bool) { return (a === '*') || (b === '*') ? '*' : '0' },
+  sub(a: Bool, b: Bool) { return a === b || a === '0' },
+  lub(a: Bool, b: Bool) { return a === b ? a : '*' },
 };
 
+// boolean semiring 2 (1s must be used)
+export type Bool2 = '0' | '1';
+export const Bool2 = ['0', '1'];
+export const bool2 : PORig<Bool2> = {
+  zero: '0',
+  one: '1',
+  default: '1',
+  add(a: Bool2, b: Bool2) { return (a === '1') || (b === '1') ? '1' : '0' },
+  multiply(a: Bool2, b: Bool2) { return (a === '1') && (b === '1') ? '1' : '0' },
+  sub(a: Bool2, b: Bool2) { return a === b },
+  lub(a: Bool2, b: Bool2) { return a === b ? a : null },
+};
+
+// linearity semiring
 export type Lin = '0' | '1' | '*';
 export const Lin = ['0', '1', '*'];
 export const linear : PORig<Lin> = {
@@ -92,3 +108,90 @@ export const linear : PORig<Lin> = {
     return '*';
   },
 };
+
+export type FiveLin = '0' | '1-' | '1' | '1+' | '*';
+export const FiveLin = ['0', '1-', '1', '1+', '*'];
+export const fiveLinear : PORig<FiveLin> = {
+  zero: '0',
+  one: '1',
+  default: '*',
+  add(a: FiveLin, b: FiveLin) {
+    /*
+    +  0  1-  1  1+  *
+    0  0  1-  1  *   *
+    1- 1- *   *  *   *
+    1  1  *   *  1+  *
+    1+ *  *   1+ 1+  *
+    *  *  *   *  *   *
+    */
+    if (a === '*' || b === '*') return '*';
+    if (a === '1' && b === '1') return '*';
+    if (a === '1-' && b === '1-') return '*';
+    if (a === '1+' && b === '0') return '*';
+    if (a === '0' && b === '1+') return '*';
+    if (a === '1-' && b === '1+') return '*';
+    if (a === '1+' && b === '1-') return '*';
+    if (a === '1' && b === '1-') return '*';
+    if (a === '1-' && b === '1') return '*';
+    if (a === '0' && b === '0') return '0';
+    if (a === '1' && b === '0') return '1';
+    if (a === '0' && b === '1') return '1';
+    if (a === '1-' && b === '0') return '1-';
+    if (a === '0' && b === '1-') return '1-';
+    if (a === '1+' && b === '1') return '1+';
+    if (a === '1' && b === '1+') return '1+';
+    return '0';
+  },
+  multiply(a: FiveLin, b: FiveLin) {
+    /*
+    *  0  1-  1  1+  *
+    0  0  0   0  0   0
+    1- 0  1-  1- *   *
+    1  0  1-  1  1+  *
+    1+ 0  *   1+ 1+  *
+    *  0  *   *  *   *
+    */
+    if (a === '0' || b === '0') return '0';
+    if (a === '1') return b;
+    if (b === '1') return a;
+    if (a === '1-' && b === '1-') return '1-';
+    if (a === '1+' && b === '1+') return '1+';
+    if (a === '1+' && b === '1-') return '*';
+    if (a === '1-' && b === '1+') return '*';
+    return '*';
+  },
+  sub(a: FiveLin, b: FiveLin) {
+    /*
+    0  1-
+    0  *
+    1- *
+    1  1-
+    1  1+
+    1  *
+    1+ *
+    */
+    if (a === b) return true;
+    if (a === '0' && b === '1-') return true;
+    if (a === '0' && b === '*') return true;
+    if (a === '1-' && b === '*') return true;
+    if (a === '1' && b === '1-') return true;
+    if (a === '1' && b === '1+') return true;
+    if (a === '1' && b === '*') return true;
+    if (a === '1+' && b === '*') return true;
+    return false;
+  },
+  lub(a: FiveLin, b: FiveLin) {
+    /*
+    0  1-  1-
+    1- 1   1-
+    1  1+  1+
+    _  _   *
+    */
+    if (a === b) return a;
+    if ((a === '0' && b === '1-') || (a === '1-' && b === '0')) return '1-';
+    if ((a === '1' && b === '1-') || (a === '1' && b === '1-')) return '1-';
+    if ((a === '1' && b === '1+') || (a === '1+' && b === '1')) return '1+';
+    return '*';
+  },
+};
+

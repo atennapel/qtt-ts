@@ -391,7 +391,7 @@ const tokenize = (sc) => {
                 t += c;
         }
         else if (state === NUMBER) {
-            if (!/[0-9a-z]/i.test(c)) {
+            if (!/[0-9a-z\+\-]/i.test(c)) {
                 r.push(TNum(t));
                 t = '', i--, state = START;
             }
@@ -521,9 +521,9 @@ const codepoints = (s) => {
     }
     return chars;
 };
-const numToNat = (n) => {
+const numToNat = (n, orig) => {
     if (isNaN(n))
-        return utils_1.serr(`invalid nat number: ${n}`);
+        return utils_1.serr(`invalid nat number: ${orig}`);
     const s = surface_1.Var('S');
     let c = surface_1.Var('Z');
     for (let i = 0; i < n; i++)
@@ -537,7 +537,7 @@ const expr = (t, fromRepl) => {
         const s = codepoints(t.str).reverse();
         const Cons = surface_1.Var('Cons');
         const Nil = surface_1.Var('Nil');
-        return [s.reduce((t, n) => surface_1.App(surface_1.App(Cons, numToNat(n)), t), Nil), false];
+        return [s.reduce((t, n) => surface_1.App(surface_1.App(Cons, numToNat(n, '<codepoint>')), t), Nil), false];
     }
     if (t.tag === 'Name') {
         const x = t.name;
@@ -571,10 +571,10 @@ const expr = (t, fromRepl) => {
             return [c, false];
         }
         else if (t.num.endsWith('n')) {
-            return [numToNat(+t.num.slice(0, -1)), false];
+            return [numToNat(+t.num.slice(0, -1), t.num), false];
         }
         else {
-            return [numToNat(+t.num), false];
+            return [numToNat(+t.num, t.num), false];
         }
     }
     return t;
@@ -710,7 +710,7 @@ exports.parse = parse;
 },{"./config":1,"./surface":9,"./usage":10,"./utils/utils":12}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.linear = exports.Lin = exports.bool = exports.Bool = exports.trivial = exports.Triv = exports.lubUsesRig = exports.multiplyUsesRig = exports.addUsesRig = exports.noUsesRig = void 0;
+exports.fiveLinear = exports.FiveLin = exports.linear = exports.Lin = exports.bool2 = exports.Bool2 = exports.bool = exports.Bool = exports.trivial = exports.Triv = exports.lubUsesRig = exports.multiplyUsesRig = exports.addUsesRig = exports.noUsesRig = void 0;
 const list_1 = require("./utils/list");
 const noUsesRig = (rig, size) => list_1.map(list_1.range(size), () => rig.zero);
 exports.noUsesRig = noUsesRig;
@@ -740,8 +740,18 @@ exports.bool = {
     default: '*',
     add(a, b) { return (a === '*') || (b === '*') ? '*' : '0'; },
     multiply(a, b) { return (a === '*') && (b === '*') ? '*' : '0'; },
-    sub(a, b) { return !((a === '*') && !(b === '*')); },
-    lub(a, b) { return (a === '*') || (b === '*') ? '*' : '0'; },
+    sub(a, b) { return a === b || a === '0'; },
+    lub(a, b) { return a === b ? a : '*'; },
+};
+exports.Bool2 = ['0', '1'];
+exports.bool2 = {
+    zero: '0',
+    one: '1',
+    default: '1',
+    add(a, b) { return (a === '1') || (b === '1') ? '1' : '0'; },
+    multiply(a, b) { return (a === '1') && (b === '1') ? '1' : '0'; },
+    sub(a, b) { return a === b; },
+    lub(a, b) { return a === b ? a : null; },
 };
 exports.Lin = ['0', '1', '*'];
 exports.linear = {
@@ -778,6 +788,125 @@ exports.linear = {
     lub(a, b) {
         if (a === b)
             return a;
+        return '*';
+    },
+};
+exports.FiveLin = ['0', '1-', '1', '1+', '*'];
+exports.fiveLinear = {
+    zero: '0',
+    one: '1',
+    default: '*',
+    add(a, b) {
+        /*
+        +  0  1-  1  1+  *
+        0  0  1-  1  *   *
+        1- 1- *   *  *   *
+        1  1  *   *  1+  *
+        1+ *  *   1+ 1+  *
+        *  *  *   *  *   *
+        */
+        if (a === '*' || b === '*')
+            return '*';
+        if (a === '1' && b === '1')
+            return '*';
+        if (a === '1-' && b === '1-')
+            return '*';
+        if (a === '1+' && b === '0')
+            return '*';
+        if (a === '0' && b === '1+')
+            return '*';
+        if (a === '1-' && b === '1+')
+            return '*';
+        if (a === '1+' && b === '1-')
+            return '*';
+        if (a === '1' && b === '1-')
+            return '*';
+        if (a === '1-' && b === '1')
+            return '*';
+        if (a === '0' && b === '0')
+            return '0';
+        if (a === '1' && b === '0')
+            return '1';
+        if (a === '0' && b === '1')
+            return '1';
+        if (a === '1-' && b === '0')
+            return '1-';
+        if (a === '0' && b === '1-')
+            return '1-';
+        if (a === '1+' && b === '1')
+            return '1+';
+        if (a === '1' && b === '1+')
+            return '1+';
+        return '0';
+    },
+    multiply(a, b) {
+        /*
+        *  0  1-  1  1+  *
+        0  0  0   0  0   0
+        1- 0  1-  1- *   *
+        1  0  1-  1  1+  *
+        1+ 0  *   1+ 1+  *
+        *  0  *   *  *   *
+        */
+        if (a === '0' || b === '0')
+            return '0';
+        if (a === '1')
+            return b;
+        if (b === '1')
+            return a;
+        if (a === '1-' && b === '1-')
+            return '1-';
+        if (a === '1+' && b === '1+')
+            return '1+';
+        if (a === '1+' && b === '1-')
+            return '*';
+        if (a === '1-' && b === '1+')
+            return '*';
+        return '*';
+    },
+    sub(a, b) {
+        /*
+        0  1-
+        0  *
+        1- *
+        1  1-
+        1  1+
+        1  *
+        1+ *
+        */
+        if (a === b)
+            return true;
+        if (a === '0' && b === '1-')
+            return true;
+        if (a === '0' && b === '*')
+            return true;
+        if (a === '1-' && b === '*')
+            return true;
+        if (a === '1' && b === '1-')
+            return true;
+        if (a === '1' && b === '1+')
+            return true;
+        if (a === '1' && b === '*')
+            return true;
+        if (a === '1+' && b === '*')
+            return true;
+        return false;
+    },
+    lub(a, b) {
+        /*
+        0  1-  1-
+        1- 1   1-
+        1  1+  1+
+        _  _   *
+        */
+        if (a === b)
+            return a;
+        if ((a === '0' && b === '1-') || (a === '1-' && b === '0'))
+            return '1-';
+        if ((a === '1' && b === '1-') || (a === '1' && b === '1-'))
+            return '1-';
+        if ((a === '1' && b === '1+') || (a === '1+' && b === '1'))
+            return '1+';
         return '*';
     },
 };
@@ -1000,8 +1129,8 @@ exports.showVal = showVal;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.lubUses = exports.multiplyUses = exports.addUses = exports.noUses = exports.UsageRig = exports.Usage = void 0;
 const porig_1 = require("./porig");
-exports.Usage = porig_1.Lin;
-exports.UsageRig = porig_1.linear;
+exports.Usage = porig_1.FiveLin;
+exports.UsageRig = porig_1.fiveLinear;
 const noUses = (size) => porig_1.noUsesRig(exports.UsageRig, size);
 exports.noUses = noUses;
 const addUses = (a, b) => porig_1.addUsesRig(exports.UsageRig, a, b);

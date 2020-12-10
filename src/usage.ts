@@ -1,8 +1,8 @@
-import { addUsesRig, Lin, linear, lubUsesRig, multiplyUsesRig, noUsesRig, UsesRig } from './porig';
+import { addUsesRig, FiveLin, fiveLinear, lubUsesRig, multiplyUsesRig, noUsesRig, UsesRig } from './porig';
 
-export type Usage = Lin;
-export const Usage = Lin;
-export const UsageRig = linear;
+export type Usage = FiveLin;
+export const Usage = FiveLin;
+export const UsageRig = fiveLinear;
 
 // derived
 export type Uses = UsesRig<Usage>;

@@ -66,7 +66,7 @@ const tokenize = (sc: string): Token[] => {
         t = '', i--, state = START;
       } else t += c;
     } else if (state === NUMBER) {
-      if (!/[0-9a-z]/i.test(c)) {
+      if (!/[0-9a-z\+\-]/i.test(c)) {
         r.push(TNum(t));
         t = '', i--, state = START;
       } else t += c;
@@ -177,8 +177,8 @@ const codepoints = (s: string): number[] => {
   return chars;
 };
 
-const numToNat = (n: number): Term => {
-  if (isNaN(n)) return serr(`invalid nat number: ${n}`);
+const numToNat = (n: number, orig: string): Term => {
+  if (isNaN(n)) return serr(`invalid nat number: ${orig}`);
   const s = Var('S');
   let c: Term = Var('Z');
   for (let i = 0; i < n; i++) c = App(s, c);
@@ -192,7 +192,7 @@ const expr = (t: Token, fromRepl: boolean): [Term, boolean] => {
     const s = codepoints(t.str).reverse();
     const Cons = Var('Cons');
     const Nil = Var('Nil');
-    return [s.reduce((t, n) => App(App(Cons, numToNat(n)), t), Nil as Term), false];
+    return [s.reduce((t, n) => App(App(Cons, numToNat(n, '<codepoint>')), t), Nil as Term), false];
   }
   if (t.tag === 'Name') {
     const x = t.name;
@@ -218,9 +218,9 @@ const expr = (t: Token, fromRepl: boolean): [Term, boolean] => {
       for (let i = 0; i < n; i++) c = App(s, c);
       return [c, false];
     } else if (t.num.endsWith('n')) {
-      return [numToNat(+t.num.slice(0, -1)), false];
+      return [numToNat(+t.num.slice(0, -1), t.num), false];
     } else {
-      return [numToNat(+t.num), false];
+      return [numToNat(+t.num, t.num), false];
     }
   }
   return t;

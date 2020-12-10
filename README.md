@@ -21,7 +21,7 @@ yarn start example.p
 ```
 
 Notes:
-- this implements the 0, 1, unrestricted (which I denote with *) rig currently, but the typechecker can handle any partially ordered semiring
+- this currently implements the 0, 1- (affine), 1, 1+ (relevant), * (unrestricted) rig (the five-point linearity semiring), but the typechecker can handle any partially ordered semiring
 - application does not have the usage annotation, these will be infered from the function type
 - lambda with unannotated usage will be * by default unless checked against a function type, then it will use the usage from the type
 
