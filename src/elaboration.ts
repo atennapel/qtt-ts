@@ -1,9 +1,9 @@
 import { log } from './config';
-import { Abs, App, Let, Pi, Term, Type, Unit, UnitType, Var } from './core';
+import { Abs, App, Let, Pair, Pi, Sigma, Term, Type, Unit, UnitType, Var } from './core';
 import { Ix, Name } from './names';
 import { Cons, indexOf, List, Nil, uncons, updateAt } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
@@ -54,6 +54,11 @@ const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
     if (!UsageRig.sub(ux, ty.usage))
       return terr(`usage error in ${show(tm)}: expected ${ty.usage} for ${x} but actual ${ux}`);
     return [Abs(ty.usage, x, quote(ty.type, local.level), body), urest];
+  }
+  if (tm.tag === 'Pair' && ty.tag === 'VSigma') {
+    const [fst, u1] = check(local, tm.fst, ty.type);
+    const [snd, u2] = check(local, tm.snd, vinst(ty, evaluate(fst, local.vs)));
+    return [Pair(fst, snd, quote(ty, local.level)), addUses(multiplyUses(ty.usage, u1), u2)];
   }
   if (tm.tag === 'Let') {
     let vtype: Term;
@@ -120,6 +125,19 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     const [body, u2] = check(localExtend(local, tm.name, ty, '0'), tm.body, VType);
     const [, urest] = uncons(u2);
     return [Pi(tm.usage, tm.name, type, body), VType, addUses(u1, urest)];
+  }
+  if (tm.tag === 'Sigma') {
+    const [type, u1] = check(local, tm.type, VType);
+    const ty = evaluate(type, local.vs);
+    const [body, u2] = check(localExtend(local, tm.name, ty, '0'), tm.body, VType);
+    const [, urest] = uncons(u2);
+    return [Sigma(tm.usage, tm.name, type, body), VType, addUses(u1, urest)];
+  }
+  if (tm.tag === 'Pair') {
+    const [fst, ty1, u1] = synth(local, tm.fst);
+    const [snd, ty2, u2] = synth(local, tm.snd);
+    const ty = VSigma(UsageRig.default, '_', ty1, _ => ty2);
+    return [Pair(fst, snd, quote(ty, local.level)), ty, addUses(multiplyUses(ty.usage, u1), u2)];
   }
   if (tm.tag === 'Let') {
     let type: Term;

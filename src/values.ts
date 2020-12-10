@@ -1,4 +1,4 @@
-import { Abs, App, Pi, Term, Type, Var, UnitType, Unit } from './core';
+import { Abs, App, Pi, Term, Type, Var, UnitType, Unit, Sigma, Pair } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
@@ -21,7 +21,7 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VType | VNe | VAbs | VPi | VUnitType | VUnit;
+export type Val = VType | VNe | VAbs | VPi | VUnitType | VUnit | VSigma | VPair;
 
 export interface VType { readonly tag: 'VType' }
 export const VType: VType = { tag: 'VType' };
@@ -35,8 +35,12 @@ export interface VUnitType { readonly tag: 'VUnitType' }
 export const VUnitType: VUnitType = { tag: 'VUnitType' };
 export interface VUnit { readonly tag: 'VUnit' }
 export const VUnit: VUnit = { tag: 'VUnit' };
+export interface VSigma { readonly tag: 'VSigma'; readonly usage: Usage; readonly name: Name; readonly type: Val; readonly clos: Clos }
+export const VSigma = (usage: Usage, name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', usage, name, type, clos });
+export interface VPair { readonly tag: 'VPair'; readonly fst: Val; readonly snd: Val; readonly type: Val }
+export const VPair = (fst: Val, snd: Val, type: Val): VPair => ({ tag: 'VPair', fst, snd, type });
 
-export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' };
+export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' | 'VSigma' };
 
 export const VVar = (level: Lvl, spine: Spine = Nil): Val => VNe(HVar(level), spine);
 
@@ -56,12 +60,16 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return VAbs(t.usage, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Pi')
     return VPi(t.usage, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
+  if (t.tag === 'Sigma')
+    return VSigma(t.usage, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Var') 
     return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
   if (t.tag === 'App')
     return vapp(evaluate(t.fn, vs), evaluate(t.arg, vs));
   if (t.tag === 'Let')
     return evaluate(t.body, Cons(evaluate(t.val, vs), vs));
+  if (t.tag === 'Pair')
+    return VPair(evaluate(t.fst, vs), evaluate(t.snd, vs), evaluate(t.type, vs));
   return t;
 };
 
@@ -87,6 +95,10 @@ export const quote = (v: Val, k: Ix): Term => {
     return Abs(v.usage, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
   if (v.tag === 'VPi')
     return Pi(v.usage, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
+  if (v.tag === 'VSigma')
+    return Sigma(v.usage, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
+  if (v.tag === 'VPair')
+    return Pair(quote(v.fst, k), quote(v.snd, k), quote(v.type, k));
   return v;
 };
 

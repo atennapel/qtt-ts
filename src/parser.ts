@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -24,8 +24,8 @@ const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list, bracket });
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
-const SYM1: string[] = ['\\', ':', '=', ';', '*'];
-const SYM2: string[] = ['->'];
+const SYM1: string[] = ['\\', ':', '=', ';', '*', ','];
+const SYM2: string[] = ['->', '**'];
 
 const START = 0;
 const NAME = 1;
@@ -308,6 +308,35 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(', fromRepl);
     return args.reduceRight((x, [u, name, , ty]) => Pi(u, name, ty, x), body);
+  }
+  const jp = ts.findIndex(x => isName(x, ','));
+  if (jp >= 0) {
+    const s = splitTokens(ts, x => isName(x, ','));
+    if (s.length < 2) return serr(`parsing failed with ,`);
+    const args: [Term, boolean][] = s.map(x => {
+      if (x.length === 1) {
+        const h = x[0];
+        if (h.tag === 'List' && h.bracket === '{')
+          return expr(h, fromRepl)
+      }
+      return [exprs(x, '(', fromRepl), false];
+    });
+    if (args.length === 0) return serr(`empty pair`);
+    if (args.length === 1) return serr(`singleton pair`);
+    const last1 = args[args.length - 1];
+    const last2 = args[args.length - 2];
+    const lastitem = Pair(last2[0], last1[0]);
+    return args.slice(0, -2).reduceRight((x, [y, _p]) => Pair(y, x), lastitem);
+  }
+  const js = ts.findIndex(x => isName(x, '**'));
+  if (js >= 0) {
+    const s = splitTokens(ts, x => isName(x, '**'));
+    if (s.length < 2) return serr(`parsing failed with **`);
+    const args: [Usage, Name, boolean, Term][] = s.slice(0, -1)
+      .map(p => p.length === 1 ? piParams(p[0], fromRepl) : [[UsageRig.default, '_', false, exprs(p, '(', fromRepl)] as [Usage, Name, boolean, Term]])
+      .reduce((x, y) => x.concat(y), []);
+    const body = exprs(s[s.length - 1], '(', fromRepl);
+    return args.reduceRight((x, [u, name, , ty]) => Sigma(u, name, ty, x), body);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];

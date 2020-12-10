@@ -5,7 +5,7 @@ import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
 import { Usage, UsageRig } from './usage';
 
-export type Term = Type | Var | Pi | Abs | App | Let | UnitType | Unit;
+export type Term = Type | Var | Pi | Abs | App | Let | UnitType | Unit | Sigma | Pair;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -23,6 +23,10 @@ export interface UnitType { readonly tag: 'UnitType' }
 export const UnitType: UnitType = { tag: 'UnitType' };
 export interface Unit { readonly tag: 'Unit' }
 export const Unit: Unit = { tag: 'Unit' };
+export interface Sigma { readonly tag: 'Sigma'; readonly usage: Usage; readonly name: Name; readonly type: Term; readonly body: Term }
+export const Sigma = (usage: Usage, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', usage, name, type, body });
+export interface Pair { readonly tag: 'Pair'; readonly fst: Term; readonly snd: Term }
+export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
 
 export const flattenPi = (t: Term): [[Usage, Name, Term][], Term] => {
   const params: [Usage, Name, Term][] = [];
@@ -51,9 +55,27 @@ export const flattenApp = (t: Term): [Term, Term[]] => {
   }
   return [c, args.reverse()];
 };
+export const flattenSigma = (t: Term): [[Usage, Name, Term][], Term] => {
+  const params: [Usage, Name, Term][] = [];
+  let c = t;  
+  while (c.tag === 'Sigma') {
+    params.push([c.usage, c.name, c.type]);
+    c = c.body;
+  }
+  return [params, c];
+};
+export const flattenPair = (t: Term): Term[] => {
+  const r: Term[] = [];
+  while (t.tag === 'Pair') {
+    r.push(t.fst);
+    t = t.snd;
+  }
+  r.push(t);
+  return r;
+};
 
 const showP = (b: boolean, t: Term) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'UnitType' || t.tag === 'Unit'; 
+const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair'; 
 export const show = (t: Term): string => {
   if (t.tag === 'Type') return 'Type';
   if (t.tag === 'UnitType') return '()';
@@ -61,7 +83,11 @@ export const show = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
   if (t.tag === 'Pi') {
     const [params, ret] = flattenPi(t);
-    return `${params.map(([u, x, t]) => u === UsageRig.default && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `(${u === UsageRig.default ? '' : `${u} `}${x} : ${show(t)})`).join(' -> ')} -> ${show(ret)}`;
+    return `${params.map(([u, x, t]) => u === UsageRig.default && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Sigma' || t.tag === 'Let', t) : `(${u === UsageRig.default ? '' : `${u} `}${x} : ${show(t)})`).join(' -> ')} -> ${show(ret)}`;
+  }
+  if (t.tag === 'Sigma') {
+    const [params, ret] = flattenSigma(t);
+    return `${params.map(([u, x, t]) => u === UsageRig.default && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Sigma' || t.tag === 'Let', t) : `(${u === UsageRig.default ? '' : `${u} `}${x} : ${show(t)})`).join(' ** ')} ** ${show(ret)}`;
   }
   if (t.tag === 'Abs') {
     const [params, body] = flattenAbs(t);
@@ -73,6 +99,10 @@ export const show = (t: Term): string => {
   }
   if (t.tag === 'Let')
     return `let ${t.usage === UsageRig.default ? '' : `${t.usage} `}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
+  if (t.tag === 'Pair') {
+    const ps = flattenPair(t);
+    return `(${ps.map(show).join(', ')})`;
+  }
   return t;
 };
 
@@ -86,6 +116,10 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
     const x = chooseName(t.name, ns);
     return Pi(t.usage, x, fromCore(t.type, ns), fromCore(t.body, Cons(x, ns)));
   }
+  if (t.tag === 'Sigma') {
+    const x = chooseName(t.name, ns);
+    return Sigma(t.usage, x, fromCore(t.type, ns), fromCore(t.body, Cons(x, ns)));
+  }
   if (t.tag === 'Abs') {
     const x = chooseName(t.name, ns);
     return Abs(t.usage, x, fromCore(t.type, ns), fromCore(t.body, Cons(x, ns)));
@@ -94,6 +128,7 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
     const x = chooseName(t.name, ns);
     return Let(t.usage, x, fromCore(t.type, ns), fromCore(t.val, ns), fromCore(t.body, Cons(x, ns)));
   }
+  if (t.tag === 'Pair') return Pair(fromCore(t.fst, ns), fromCore(t.snd, ns));
   return t;
 };
 

@@ -81,6 +81,13 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     const [, urest] = uncons(u2);
     return [VType, addUses(u1, urest)];
   }
+  if (tm.tag === 'Sigma') {
+    const u1 = check(local, tm.type, VType);
+    const ty = evaluate(tm.type, local.vs);
+    const u2 = check(localExtend(local, ty, UsageRig.default), tm.body, VType);
+    const [, urest] = uncons(u2);
+    return [VType, addUses(u1, urest)];
+  }
   if (tm.tag === 'Let') {
     check(local, tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
@@ -91,6 +98,14 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     if (!UsageRig.sub(ux, tm.usage))
       return terr(`usage error in ${show(tm)}: expected ${tm.usage} for ${tm.name} but actual ${ux}`);
     return [rty, addUses(multiplyUses(ux, uv), urest)];
+  }
+  if (tm.tag === 'Pair') {
+    check(local, tm.type, VType);
+    const vsigma = evaluate(tm.type, local.vs);
+    if (vsigma.tag !== 'VSigma') return terr(`pair without sigma type: ${show(tm)}`);
+    const u1 = check(local, tm.fst, vsigma.type);
+    const u2 = check(local, tm.snd, vinst(vsigma, evaluate(tm.fst, local.vs)));
+    return [vsigma, addUses(multiplyUses(vsigma.usage, u1), u2)];
   }
   return terr(`unable to synth ${show(tm)}`);
 };
