@@ -1,8 +1,9 @@
 import { log } from './config';
 import { Ix } from './names';
+import { UsageRig } from './usage';
 import { zipWithR_ } from './utils/list';
 import { terr } from './utils/utils';
-import { Elim, Head, show, Val, vapp, vinst, VVar } from './values';
+import { Elim, Head, show, VAbs, Val, vapp, vindsigma, vinst, VPair, VSigma, VVar } from './values';
 
 export const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -14,6 +15,10 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a.tag === 'EApp' && b.tag === 'EApp') return conv(k, a.arg, b.arg);
   if (a.tag === 'EIndVoid' && b.tag === 'EIndVoid') return conv(k, a.motive, b.motive);
   if (a.tag === 'EIndUnit' && b.tag === 'EIndUnit') {
+    conv(k, a.motive, b.motive);
+    return conv(k, a.cas, b.cas);
+  }
+  if (a.tag === 'EIndSigma' && b.tag === 'EIndSigma') {
     conv(k, a.motive, b.motive);
     return conv(k, a.cas, b.cas);
   }
@@ -67,16 +72,16 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     return conv(k + 1, vapp(a, v), vinst(b, v));
   }
 
-  /* TODO: sigma unit law
   if (a.tag === 'VPair') {
-    conv(k, a.fst, vproj('fst', b));
-    return conv(k, a.snd, vproj('snd', b));
+    const [fst, snd] = etaSigma(a, b);
+    conv(k, a.fst, fst);
+    return conv(k, a.snd, snd);
   }
   if (b.tag === 'VPair') {
-    conv(k, vproj('fst', a), b.fst);
-    return conv(k, vproj('snd', a), b.snd);
+    const [fst, snd] = etaSigma(b, a);
+    conv(k, fst, b.fst);
+    return conv(k, snd, b.snd);
   }
-  */
 
   if (a.tag === 'VUnit' || b.tag === 'VUnit') return;
 
@@ -84,4 +89,20 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     return zipWithR_((x, y) => convElim(k, x, y, a, b), a.spine, b.spine);
 
   return terr(`conv failed (${k}): ${show(a, k)} ~ ${show(b, k)}`);
+};
+
+const etaSigma = (a: VPair, b: Val): [Val, Val] => {
+  /*
+  TODO: is this correct?
+  x ~ indSigma (\_. s.type) t (\(x : s.type) (y : s.body(x)). x)
+  y ~ indSigma (\_. s.body(x)) t (\(x : _) (y : _). y) 
+  --------------------------
+  (x, y : s) ~ t
+  */
+  const sigma = a.type as VSigma;
+  const fst = vindsigma(VAbs(UsageRig.default, '_', sigma, _ => sigma.type), b,
+    VAbs(sigma.usage, 'x', sigma.type, x => VAbs(UsageRig.one, 'y', vinst(sigma, x), _ => x)))
+  const snd = vindsigma(VAbs(UsageRig.default, '_', sigma, _ => vinst(sigma, fst)), b,
+    VAbs(sigma.usage, 'x', sigma.type, x => VAbs(UsageRig.one, 'y', vinst(sigma, x), y => y)))
+  return [fst, snd];
 };

@@ -21,13 +21,14 @@ t ::=
 
   (u x : t) ** t      -- sigma/pair type
   (t, t : t)          -- pair
+  indSigma u t t t    -- sigma induction
 
   t ++ t              -- sum type
   Left t t t          -- left injection
   Right t t t         -- right injection
   indSum u t t t t    -- sum induction
 */
-export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | Sum | Inj | IndSum;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | IndSigma | Sum | Inj | IndSum;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -55,6 +56,8 @@ export interface Sigma { readonly tag: 'Sigma'; readonly usage: Usage; readonly 
 export const Sigma = (usage: Usage, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', usage, name, type, body });
 export interface Pair { readonly tag: 'Pair'; readonly fst: Term; readonly snd: Term; readonly type: Term }
 export const Pair = (fst: Term, snd: Term, type: Term): Pair => ({ tag: 'Pair', fst, snd, type });
+export interface IndSigma { readonly tag: 'IndSigma'; readonly motive: Term; readonly scrut: Term, readonly cas: Term }
+export const IndSigma = (motive: Term, scrut: Term, cas: Term): IndSigma => ({ tag: 'IndSigma', motive, scrut, cas });
 export interface Sum { readonly tag: 'Sum'; readonly left: Term; readonly right: Term }
 export const Sum = (left: Term, right: Term): Sum => ({ tag: 'Sum', left, right });
 export interface Inj { readonly tag: 'Inj'; readonly which: 'Left' | 'Right'; readonly left: Term; readonly right: Term; readonly val: Term }
@@ -158,5 +161,7 @@ export const show = (t: Term): string => {
     return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   if (t.tag === 'IndSum')
     return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
+  if (t.tag === 'IndSigma')
+    return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   return t;
 };

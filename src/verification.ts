@@ -3,7 +3,7 @@ import { Pi, Term, show } from './core';
 import { Ix } from './names';
 import { Cons, List, Nil, updateAt, uncons, zipWith, range, filter, index, toArray } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar, VSum, VPi, VVoid, VUnit, VInj, vapp } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar, VSum, VPi, VVoid, VUnit, VInj, VPair, vapp } from './values';
 import * as V from './values';
 import { conv } from './conversion';
 import { addUses, lubUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
@@ -133,11 +133,19 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     const u2 = check(local, tm.cas, vapp(motive, VUnit));
     return [vapp(motive, evaluate(tm.scrut, local.vs)), addUses(u1, u2)];
   }
+  if (tm.tag === 'IndSigma') {
+    const [sigma, u1] = synth(local, tm.scrut);
+    if (sigma.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, sigma)}`);
+    check(local, tm.motive, VPi(UsageRig.default, '_', sigma, _ => VType));
+    const motive = evaluate(tm.motive, local.vs);
+    const u2 = check(local, tm.cas, VPi(sigma.usage, 'x', sigma.type, x => VPi(UsageRig.one, 'y', vinst(sigma, x), y => vapp(motive, VPair(x, y, sigma)))));
+    return [vapp(motive, evaluate(tm.scrut, local.vs)), addUses(u1, u2)];
+  }
   if (tm.tag === 'IndSum') {
     if (!UsageRig.sub(UsageRig.one, tm.usage))
       return terr(`usage must be 1 <= q in sum induction ${show(tm)}: ${tm.usage}`)
     const [sumty, u1] = synth(local, tm.scrut);
-    if (sumty.tag !== 'VSum') return terr(`not a sumtype in ${show(tm)}: ${showVal(local, sumty)}`);
+    if (sumty.tag !== 'VSum') return terr(`not a sum type in ${show(tm)}: ${showVal(local, sumty)}`);
     check(local, tm.motive, VPi(UsageRig.default, '_', sumty, _ => VType));
     const motive = evaluate(tm.motive, local.vs);
     const uleft = check(local, tm.caseLeft, VPi(tm.usage, 'x', sumty.left, x => vapp(motive, VInj('Left', sumty.left, sumty.right, x))));

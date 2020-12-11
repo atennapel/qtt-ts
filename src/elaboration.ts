@@ -1,9 +1,9 @@
 import { log } from './config';
-import { Abs, App, IndSum, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
+import { Abs, App, IndSigma, IndSum, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
 import { Ix, Name } from './names';
 import { Cons, filter, index, indexOf, List, Nil, range, toArray, uncons, updateAt, zipWith } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp, VUnit, VInj } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp, VUnit, VInj, VPair } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
@@ -187,6 +187,14 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     const vmotive = evaluate(motive, local.vs);
     const [cas, u2] = check(local, tm.cas, vapp(vmotive, VUnit));
     return [IndUnit(motive, scrut, cas), vapp(vmotive, evaluate(scrut, local.vs)), addUses(u1, u2)];
+  }
+  if (tm.tag === 'IndSigma') {
+    const [scrut, sigma, u1] = synth(local, tm.scrut);
+    if (sigma.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, sigma)}`);
+    const [motive] = check(local, tm.motive, VPi(UsageRig.default, '_', sigma, _ => VType));
+    const vmotive = evaluate(motive, local.vs);
+    const [cas, u2] = check(local, tm.cas, VPi(sigma.usage, 'x', sigma.type, x => VPi(UsageRig.one, 'y', vinst(sigma, x), y => vapp(vmotive, VPair(x, y, sigma)))));
+    return [IndSigma(motive, scrut, cas), vapp(vmotive, evaluate(scrut, local.vs)), addUses(u1, u2)];
   }
   if (tm.tag === 'IndSum') {
     if (!UsageRig.sub(UsageRig.one, tm.usage))

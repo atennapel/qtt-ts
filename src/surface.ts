@@ -5,7 +5,7 @@ import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
 import { Usage, UsageRig } from './usage';
 
-export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | Sum | Inj | IndSum;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | Sum | Inj | IndSum | IndSigma;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -33,6 +33,8 @@ export interface Sigma { readonly tag: 'Sigma'; readonly usage: Usage; readonly 
 export const Sigma = (usage: Usage, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', usage, name, type, body });
 export interface Pair { readonly tag: 'Pair'; readonly fst: Term; readonly snd: Term }
 export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
+export interface IndSigma { readonly tag: 'IndSigma'; readonly motive: Term; readonly scrut: Term, readonly cas: Term }
+export const IndSigma = (motive: Term, scrut: Term, cas: Term): IndSigma => ({ tag: 'IndSigma', motive, scrut, cas });
 export interface Sum { readonly tag: 'Sum'; readonly left: Term; readonly right: Term }
 export const Sum = (left: Term, right: Term): Sum => ({ tag: 'Sum', left, right });
 export interface Inj { readonly tag: 'Inj'; readonly which: 'Left' | 'Right'; readonly val: Term }
@@ -136,6 +138,8 @@ export const show = (t: Term): string => {
     return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   if (t.tag === 'IndSum')
     return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
+  if (t.tag === 'IndSigma')
+    return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   return t;
 };
 
@@ -167,6 +171,7 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Inj') return Inj(t.which, fromCore(t.val, ns));
   if (t.tag === 'IndVoid') return IndVoid(fromCore(t.motive, ns), fromCore(t.scrut, ns));
   if (t.tag === 'IndUnit') return IndUnit(fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
+  if (t.tag === 'IndSigma') return IndSigma(fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
   if (t.tag === 'IndSum')
     return IndSum(t.usage, fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.caseLeft, ns), fromCore(t.caseRight, ns));
   return t;

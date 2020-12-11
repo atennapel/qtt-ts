@@ -22,6 +22,7 @@ exports.log = log;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.conv = exports.eqHead = void 0;
 const config_1 = require("./config");
+const usage_1 = require("./usage");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
@@ -41,6 +42,10 @@ const convElim = (k, a, b, x, y) => {
     if (a.tag === 'EIndVoid' && b.tag === 'EIndVoid')
         return exports.conv(k, a.motive, b.motive);
     if (a.tag === 'EIndUnit' && b.tag === 'EIndUnit') {
+        exports.conv(k, a.motive, b.motive);
+        return exports.conv(k, a.cas, b.cas);
+    }
+    if (a.tag === 'EIndSigma' && b.tag === 'EIndSigma') {
         exports.conv(k, a.motive, b.motive);
         return exports.conv(k, a.cas, b.cas);
     }
@@ -96,16 +101,16 @@ const conv = (k, a, b) => {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vapp(a, v), values_1.vinst(b, v));
     }
-    /* TODO: sigma unit law
     if (a.tag === 'VPair') {
-      conv(k, a.fst, vproj('fst', b));
-      return conv(k, a.snd, vproj('snd', b));
+        const [fst, snd] = etaSigma(a, b);
+        exports.conv(k, a.fst, fst);
+        return exports.conv(k, a.snd, snd);
     }
     if (b.tag === 'VPair') {
-      conv(k, vproj('fst', a), b.fst);
-      return conv(k, vproj('snd', a), b.snd);
+        const [fst, snd] = etaSigma(b, a);
+        exports.conv(k, fst, b.fst);
+        return exports.conv(k, snd, b.snd);
     }
-    */
     if (a.tag === 'VUnit' || b.tag === 'VUnit')
         return;
     if (a.tag === 'VNe' && b.tag === 'VNe' && exports.eqHead(a.head, b.head))
@@ -113,11 +118,24 @@ const conv = (k, a, b) => {
     return utils_1.terr(`conv failed (${k}): ${values_1.show(a, k)} ~ ${values_1.show(b, k)}`);
 };
 exports.conv = conv;
+const etaSigma = (a, b) => {
+    /*
+    TODO: is this correct?
+    x ~ indSigma (\_. s.type) t (\(x : s.type) (y : s.body(x)). x)
+    y ~ indSigma (\_. s.body(x)) t (\(x : _) (y : _). y)
+    --------------------------
+    (x, y : s) ~ t
+    */
+    const sigma = a.type;
+    const fst = values_1.vindsigma(values_1.VAbs(usage_1.UsageRig.default, '_', sigma, _ => sigma.type), b, values_1.VAbs(sigma.usage, 'x', sigma.type, x => values_1.VAbs(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), _ => x)));
+    const snd = values_1.vindsigma(values_1.VAbs(usage_1.UsageRig.default, '_', sigma, _ => values_1.vinst(sigma, fst)), b, values_1.VAbs(sigma.usage, 'x', sigma.type, x => values_1.VAbs(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), y => y)));
+    return [fst, snd];
+};
 
-},{"./config":1,"./utils/list":11,"./utils/utils":12,"./values":13}],3:[function(require,module,exports){
+},{"./config":1,"./usage":10,"./utils/list":11,"./utils/utils":12,"./values":13}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.IndSum = exports.Inj = exports.Sum = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const usage_1 = require("./usage");
 exports.Type = { tag: 'Type' };
 const Var = (index) => ({ tag: 'Var', index });
@@ -141,6 +159,8 @@ const Sigma = (usage, name, type, body) => ({ tag: 'Sigma', usage, name, type, b
 exports.Sigma = Sigma;
 const Pair = (fst, snd, type) => ({ tag: 'Pair', fst, snd, type });
 exports.Pair = Pair;
+const IndSigma = (motive, scrut, cas) => ({ tag: 'IndSigma', motive, scrut, cas });
+exports.IndSigma = IndSigma;
 const Sum = (left, right) => ({ tag: 'Sum', left, right });
 exports.Sum = Sum;
 const Inj = (which, left, right, val) => ({ tag: 'Inj', which, left, right, val });
@@ -253,6 +273,8 @@ const show = (t) => {
         return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     if (t.tag === 'IndSum')
         return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
+    if (t.tag === 'IndSigma')
+        return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     return t;
 };
 exports.show = show;
@@ -450,6 +472,15 @@ const synth = (local, tm) => {
         const vmotive = values_1.evaluate(motive, local.vs);
         const [cas, u2] = check(local, tm.cas, values_1.vapp(vmotive, values_1.VUnit));
         return [core_1.IndUnit(motive, scrut, cas), values_1.vapp(vmotive, values_1.evaluate(scrut, local.vs)), usage_1.addUses(u1, u2)];
+    }
+    if (tm.tag === 'IndSigma') {
+        const [scrut, sigma, u1] = synth(local, tm.scrut);
+        if (sigma.tag !== 'VSigma')
+            return utils_1.terr(`not a sigma type in ${surface_1.show(tm)}: ${showVal(local, sigma)}`);
+        const [motive] = check(local, tm.motive, values_1.VPi(usage_1.UsageRig.default, '_', sigma, _ => values_1.VType));
+        const vmotive = values_1.evaluate(motive, local.vs);
+        const [cas, u2] = check(local, tm.cas, values_1.VPi(sigma.usage, 'x', sigma.type, x => values_1.VPi(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), y => values_1.vapp(vmotive, values_1.VPair(x, y, sigma)))));
+        return [core_1.IndSigma(motive, scrut, cas), values_1.vapp(vmotive, values_1.evaluate(scrut, local.vs)), usage_1.addUses(u1, u2)];
     }
     if (tm.tag === 'IndSum') {
         if (!usage_1.UsageRig.sub(usage_1.UsageRig.one, tm.usage))
@@ -886,6 +917,14 @@ const exprs = (ts, br, fromRepl) => {
         const [cas] = expr(ts[3], fromRepl);
         return surface_1.IndUnit(motive, scrut, cas);
     }
+    if (isName(ts[0], 'indSigma')) {
+        if (ts.length !== 4)
+            return utils_1.serr(`indSigma expects exactly 3 arguments`);
+        const [motive] = expr(ts[1], fromRepl);
+        const [scrut] = expr(ts[2], fromRepl);
+        const [cas] = expr(ts[3], fromRepl);
+        return surface_1.IndSigma(motive, scrut, cas);
+    }
     if (isName(ts[0], 'indSum')) {
         let j = 1;
         let u = usage(ts[1]);
@@ -1318,7 +1357,7 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":9,"./usage":10,"./values":13,"./verification":14}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.IndSum = exports.Inj = exports.Sum = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const names_1 = require("./names");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
@@ -1346,6 +1385,8 @@ const Sigma = (usage, name, type, body) => ({ tag: 'Sigma', usage, name, type, b
 exports.Sigma = Sigma;
 const Pair = (fst, snd) => ({ tag: 'Pair', fst, snd });
 exports.Pair = Pair;
+const IndSigma = (motive, scrut, cas) => ({ tag: 'IndSigma', motive, scrut, cas });
+exports.IndSigma = IndSigma;
 const Sum = (left, right) => ({ tag: 'Sum', left, right });
 exports.Sum = Sum;
 const Inj = (which, val) => ({ tag: 'Inj', which, val });
@@ -1458,6 +1499,8 @@ const show = (t) => {
         return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     if (t.tag === 'IndSum')
         return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
+    if (t.tag === 'IndSigma')
+        return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     return t;
 };
 exports.show = show;
@@ -1500,6 +1543,8 @@ const fromCore = (t, ns = list_1.Nil) => {
         return exports.IndVoid(exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns));
     if (t.tag === 'IndUnit')
         return exports.IndUnit(exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.cas, ns));
+    if (t.tag === 'IndSigma')
+        return exports.IndSigma(exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.cas, ns));
     if (t.tag === 'IndSum')
         return exports.IndSum(t.usage, exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.caseLeft, ns), exports.fromCore(t.caseRight, ns));
     return t;
@@ -1812,7 +1857,7 @@ exports.eqArr = eqArr;
 },{"fs":16}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vindsum = exports.vindunit = exports.vindvoid = exports.vapp = exports.vinst = exports.VVar = exports.VInj = exports.VSum = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EIndSum = exports.EIndUnit = exports.EIndVoid = exports.EApp = exports.HVar = void 0;
+exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vindsum = exports.vindsigma = exports.vindunit = exports.vindvoid = exports.vapp = exports.vinst = exports.VVar = exports.VInj = exports.VSum = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EIndSum = exports.EIndSigma = exports.EIndUnit = exports.EIndVoid = exports.EApp = exports.HVar = void 0;
 const core_1 = require("./core");
 const C = require("./core");
 const list_1 = require("./utils/list");
@@ -1825,6 +1870,8 @@ const EIndVoid = (motive) => ({ tag: 'EIndVoid', motive });
 exports.EIndVoid = EIndVoid;
 const EIndUnit = (motive, cas) => ({ tag: 'EIndUnit', motive, cas });
 exports.EIndUnit = EIndUnit;
+const EIndSigma = (motive, cas) => ({ tag: 'EIndSigma', motive, cas });
+exports.EIndSigma = EIndSigma;
 const EIndSum = (usage, motive, caseLeft, caseRight) => ({ tag: 'EIndSum', usage, motive, caseLeft, caseRight });
 exports.EIndSum = EIndSum;
 exports.VType = { tag: 'VType' };
@@ -1871,6 +1918,14 @@ const vindunit = (motive, scrut, cas) => {
     return utils_1.impossible(`vindunit: ${scrut.tag}`);
 };
 exports.vindunit = vindunit;
+const vindsigma = (motive, scrut, cas) => {
+    if (scrut.tag === 'VPair')
+        return exports.vapp(exports.vapp(cas, scrut.fst), scrut.snd);
+    if (scrut.tag === 'VNe')
+        return exports.VNe(scrut.head, list_1.Cons(exports.EIndSigma(motive, cas), scrut.spine));
+    return utils_1.impossible(`vindsigma: ${scrut.tag}`);
+};
+exports.vindsigma = vindsigma;
 const vindsum = (usage, motive, scrut, caseLeft, caseRight) => {
     if (scrut.tag === 'VInj')
         return exports.vapp(scrut.which === 'Left' ? caseLeft : caseRight, scrut.val);
@@ -1910,6 +1965,8 @@ const evaluate = (t, vs) => {
         return exports.vindvoid(exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs));
     if (t.tag === 'IndUnit')
         return exports.vindunit(exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.cas, vs));
+    if (t.tag === 'IndSigma')
+        return exports.vindsigma(exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.cas, vs));
     if (t.tag === 'IndSum')
         return exports.vindsum(t.usage, exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.caseLeft, vs), exports.evaluate(t.caseRight, vs));
     return t;
@@ -1927,6 +1984,8 @@ const quoteElim = (t, e, k) => {
         return core_1.IndVoid(exports.quote(e.motive, k), t);
     if (e.tag === 'EIndUnit')
         return core_1.IndUnit(exports.quote(e.motive, k), t, exports.quote(e.cas, k));
+    if (e.tag === 'EIndSigma')
+        return core_1.IndSigma(exports.quote(e.motive, k), t, exports.quote(e.cas, k));
     if (e.tag === 'EIndSum')
         return core_1.IndSum(e.usage, exports.quote(e.motive, k), t, exports.quote(e.caseLeft, k), exports.quote(e.caseRight, k));
     return e;
@@ -2094,12 +2153,21 @@ const synth = (local, tm) => {
         const u2 = check(local, tm.cas, values_1.vapp(motive, values_1.VUnit));
         return [values_1.vapp(motive, values_1.evaluate(tm.scrut, local.vs)), usage_1.addUses(u1, u2)];
     }
+    if (tm.tag === 'IndSigma') {
+        const [sigma, u1] = synth(local, tm.scrut);
+        if (sigma.tag !== 'VSigma')
+            return utils_1.terr(`not a sigma type in ${core_1.show(tm)}: ${showVal(local, sigma)}`);
+        check(local, tm.motive, values_1.VPi(usage_1.UsageRig.default, '_', sigma, _ => values_1.VType));
+        const motive = values_1.evaluate(tm.motive, local.vs);
+        const u2 = check(local, tm.cas, values_1.VPi(sigma.usage, 'x', sigma.type, x => values_1.VPi(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), y => values_1.vapp(motive, values_1.VPair(x, y, sigma)))));
+        return [values_1.vapp(motive, values_1.evaluate(tm.scrut, local.vs)), usage_1.addUses(u1, u2)];
+    }
     if (tm.tag === 'IndSum') {
         if (!usage_1.UsageRig.sub(usage_1.UsageRig.one, tm.usage))
             return utils_1.terr(`usage must be 1 <= q in sum induction ${core_1.show(tm)}: ${tm.usage}`);
         const [sumty, u1] = synth(local, tm.scrut);
         if (sumty.tag !== 'VSum')
-            return utils_1.terr(`not a sumtype in ${core_1.show(tm)}: ${showVal(local, sumty)}`);
+            return utils_1.terr(`not a sum type in ${core_1.show(tm)}: ${showVal(local, sumty)}`);
         check(local, tm.motive, values_1.VPi(usage_1.UsageRig.default, '_', sumty, _ => values_1.VType));
         const motive = values_1.evaluate(tm.motive, local.vs);
         const uleft = check(local, tm.caseLeft, values_1.VPi(tm.usage, 'x', sumty.left, x => values_1.vapp(motive, values_1.VInj('Left', sumty.left, sumty.right, x))));
