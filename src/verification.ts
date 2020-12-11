@@ -3,7 +3,7 @@ import { Pi, Term, show } from './core';
 import { Ix } from './names';
 import { Cons, List, Nil, updateAt, uncons, zipWith, range, filter, index, toArray } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar, VSum, VPi, VVoid, VUnit, VInj, VPair, vapp } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar, VSum, VPi, VVoid, VUnit, VInj, VPair, vapp, VWorld, VFix, VSigma, VCon } from './values';
 import * as V from './values';
 import { conv } from './conversion';
 import { addUses, lubUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
@@ -158,7 +158,36 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     }
     return [vapp(motive, evaluate(tm.scrut, local.vs)), addUses(multiplyUses(tm.usage, u1), u2)];
   }
-  return terr(`unable to synth ${show(tm)}`);
+  if (tm.tag === 'World') return [VType, noUses(local.level)];
+  if (tm.tag === 'WorldToken') return [VWorld, noUses(local.level)];
+  if (tm.tag === 'Fix') {
+    const u = check(local, tm.sig, VPi(UsageRig.default, '_', VType, _ => VType));
+    return [VType, u];
+  }
+  if (tm.tag === 'Con') {
+    check(local, tm.sig, VPi(UsageRig.default, '_', VType, _ => VType));
+    const vsig = evaluate(tm.sig, local.vs);
+    const u = check(local, tm.val, vapp(vsig, VFix(vsig)));
+    return [VFix(vsig), u];
+  }
+  if (tm.tag === 'IndFix') {
+    if (!UsageRig.sub(UsageRig.one, tm.usage))
+      return terr(`usage must be 1 <= q in fix induction ${show(tm)}: ${tm.usage}`)
+    const [fixty, u1] = synth(local, tm.scrut);
+    if (fixty.tag !== 'VFix') return terr(`not a fix type in ${show(tm)}: ${showVal(local, fixty)}`);
+    check(local, tm.motive, VPi(UsageRig.default, '_', fixty, _ => VType));
+    const vmotive = evaluate(tm.motive, local.vs);
+    // ((q z : Fix f) -> P z) -> (q y : f (Fix f)) -> P (Con f y)
+    const u2 = check(local, tm.cas, VPi(UsageRig.default, '_', VPi(tm.usage, 'z', fixty, z => vapp(vmotive, z)), _ => VPi(tm.usage, 'y', vapp(fixty.sig, fixty), y => vapp(vmotive, VCon(fixty.sig, y)))));
+    return [vapp(vmotive, evaluate(tm.scrut, local.vs)), addUses(multiplyUses(tm.usage, u1), u2)];
+  }
+  if (tm.tag === 'UpdateWorld') {
+    check(local, tm.type, VType);
+    const ty = evaluate(tm.type, local.vs);
+    const u = check(local, tm.cont, VPi(UsageRig.one, '_', VWorld, _ => VSigma(tm.usage, '_', ty, _ => VWorld)));
+    return [ty, multiplyUses(tm.usage, u)];
+  }
+  return tm;
 };
 
 const synthapp = (local: Local, ty: Val, arg: Term): [Val, Uses] => {

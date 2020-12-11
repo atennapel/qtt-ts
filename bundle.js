@@ -54,6 +54,10 @@ const convElim = (k, a, b, x, y) => {
         exports.conv(k, a.caseLeft, b.caseLeft);
         return exports.conv(k, a.caseRight, b.caseRight);
     }
+    if (a.tag === 'EIndFix' && b.tag === 'EIndFix' && a.usage === b.usage) {
+        exports.conv(k, a.motive, b.motive);
+        return exports.conv(k, a.cas, b.cas);
+    }
     return utils_1.terr(`conv failed (${k}): ${values_1.show(x, k)} ~ ${values_1.show(y, k)}`);
 };
 const conv = (k, a, b) => {
@@ -65,6 +69,10 @@ const conv = (k, a, b) => {
     if (a.tag === 'VUnitType' && b.tag === 'VUnitType')
         return;
     if (a.tag === 'VUnit' && b.tag === 'VUnit')
+        return;
+    if (a.tag === 'VWorld' && b.tag === 'VWorld')
+        return;
+    if (a.tag === 'VWorldToken' && b.tag === 'VWorldToken')
         return;
     if (a.tag === 'VPi' && b.tag === 'VPi' && a.usage === b.usage) {
         exports.conv(k, a.type, b.type);
@@ -93,6 +101,12 @@ const conv = (k, a, b) => {
         exports.conv(k, a.right, b.right);
         return exports.conv(k, a.val, b.val);
     }
+    if (a.tag === 'VCon' && b.tag === 'VCon') {
+        exports.conv(k, a.sig, b.sig);
+        return exports.conv(k, a.val, b.val);
+    }
+    if (a.tag === 'VFix' && b.tag === 'VFix')
+        return exports.conv(k, a.sig, b.sig);
     if (a.tag === 'VAbs') {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vapp(b, v));
@@ -135,7 +149,7 @@ const etaSigma = (a, b) => {
 },{"./config":1,"./usage":10,"./utils/list":11,"./utils/utils":12,"./values":13}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.UpdateWorld = exports.WorldToken = exports.World = exports.IndFix = exports.Con = exports.Fix = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const usage_1 = require("./usage");
 exports.Type = { tag: 'Type' };
 const Var = (index) => ({ tag: 'Var', index });
@@ -167,6 +181,16 @@ const Inj = (which, left, right, val) => ({ tag: 'Inj', which, left, right, val 
 exports.Inj = Inj;
 const IndSum = (usage, motive, scrut, caseLeft, caseRight) => ({ tag: 'IndSum', usage, motive, scrut, caseLeft, caseRight });
 exports.IndSum = IndSum;
+const Fix = (sig) => ({ tag: 'Fix', sig });
+exports.Fix = Fix;
+const Con = (sig, val) => ({ tag: 'Con', sig, val });
+exports.Con = Con;
+const IndFix = (usage, motive, scrut, cas) => ({ tag: 'IndFix', usage, motive, scrut, cas });
+exports.IndFix = IndFix;
+exports.World = { tag: 'World' };
+exports.WorldToken = { tag: 'WorldToken' };
+const UpdateWorld = (usage, type, cont) => ({ tag: 'UpdateWorld', usage, type, cont });
+exports.UpdateWorld = UpdateWorld;
 const flattenPi = (t) => {
     const params = [];
     let c = t;
@@ -228,7 +252,7 @@ const flattenSum = (t) => {
 };
 exports.flattenSum = flattenSum;
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
-const isSimple = (t) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair';
+const isSimple = (t) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair' || t.tag === 'World' || t.tag === 'WorldToken';
 const showS = (t) => showP(!isSimple(t), t);
 const show = (t) => {
     if (t.tag === 'Type')
@@ -275,6 +299,18 @@ const show = (t) => {
         return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
     if (t.tag === 'IndSigma')
         return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+    if (t.tag === 'Fix')
+        return `Fix ${showS(t.sig)}`;
+    if (t.tag === 'Con')
+        return `Con ${showS(t.sig)} ${showS(t.val)}`;
+    if (t.tag === 'IndFix')
+        return `indFix ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+    if (t.tag === 'World')
+        return 'World';
+    if (t.tag === 'WorldToken')
+        return 'WorldToken';
+    if (t.tag === 'UpdateWorld')
+        return `updateWorld ${t.usage} ${showS(t.type)} ${showS(t.cont)}`;
     return t;
 };
 exports.show = show;
@@ -320,6 +356,8 @@ const check = (local, tm, ty) => {
         return [core_1.Type, usage_1.noUses(local.level)];
     if (tm.tag === 'Void' && ty.tag === 'VType')
         return [core_1.Void, usage_1.noUses(local.level)];
+    if (tm.tag === 'World' && ty.tag === 'VType')
+        return [core_1.World, usage_1.noUses(local.level)];
     if (tm.tag === 'UnitType' && ty.tag === 'VType')
         return [core_1.UnitType, usage_1.noUses(local.level)];
     if (tm.tag === 'Unit' && ty.tag === 'VUnitType')
@@ -341,6 +379,20 @@ const check = (local, tm, ty) => {
     if (tm.tag === 'Inj' && ty.tag === 'VSum') {
         const [val, u] = check(local, tm.val, tm.which === 'Left' ? ty.left : ty.right);
         return [core_1.Inj(tm.which, values_1.quote(ty.left, local.level), values_1.quote(ty.right, local.level), val), u];
+    }
+    if (tm.tag === 'Con' && ty.tag === 'VFix') {
+        const [val, u] = check(local, tm.val, values_1.vapp(ty.sig, ty));
+        return [core_1.Con(values_1.quote(ty.sig, local.level), val), u];
+    }
+    if (tm.tag === 'Hole') {
+        const res = [];
+        for (let i = 0; i < local.level; i++) {
+            const entry = list_1.index(local.ts, i);
+            const name = list_1.index(local.ns, i);
+            const value = list_1.index(local.vs, i);
+            res.push(`${entry ? entry.usage : '?'} ${name} : ${entry && entry.type ? showVal(local, entry.type) : '?'} = ${value ? showVal(local, value) : '?'}`);
+        }
+        return utils_1.terr(`hole _${tm.name} : ${showVal(local, ty)} in ${res.join('; ')}`);
     }
     if (tm.tag === 'Let') {
         let vtype;
@@ -498,6 +550,30 @@ const synth = (local, tm) => {
             return utils_1.terr(`usage mismatch in sum branches ${surface_1.show(tm)}: ${wrongVars.join('; ')}`);
         }
         return [core_1.IndSum(tm.usage, motive, scrut, caseLeft, caseRight), values_1.vapp(vmotive, values_1.evaluate(scrut, local.vs)), usage_1.addUses(usage_1.multiplyUses(tm.usage, u1), u2)];
+    }
+    if (tm.tag === 'World')
+        return [core_1.World, values_1.VType, usage_1.noUses(local.level)];
+    if (tm.tag === 'Fix') {
+        const [sig, u] = check(local, tm.sig, values_1.VPi(usage_1.UsageRig.default, '_', values_1.VType, _ => values_1.VType));
+        return [core_1.Fix(sig), values_1.VType, u];
+    }
+    if (tm.tag === 'IndFix') {
+        if (!usage_1.UsageRig.sub(usage_1.UsageRig.one, tm.usage))
+            return utils_1.terr(`usage must be 1 <= q in fix induction ${surface_1.show(tm)}: ${tm.usage}`);
+        const [scrut, fixty, u1] = synth(local, tm.scrut);
+        if (fixty.tag !== 'VFix')
+            return utils_1.terr(`not a fix type in ${surface_1.show(tm)}: ${showVal(local, fixty)}`);
+        const [motive] = check(local, tm.motive, values_1.VPi(usage_1.UsageRig.default, '_', fixty, _ => values_1.VType));
+        const vmotive = values_1.evaluate(motive, local.vs);
+        // ((q z : Fix f) -> P z) -> (q y : f (Fix f)) -> P (Con f y)
+        const [cas, u2] = check(local, tm.cas, values_1.VPi(usage_1.UsageRig.default, '_', values_1.VPi(tm.usage, 'z', fixty, z => values_1.vapp(vmotive, z)), _ => values_1.VPi(tm.usage, 'y', values_1.vapp(fixty.sig, fixty), y => values_1.vapp(vmotive, values_1.VCon(fixty.sig, y)))));
+        return [core_1.IndFix(tm.usage, motive, scrut, cas), values_1.vapp(vmotive, values_1.evaluate(scrut, local.vs)), usage_1.addUses(usage_1.multiplyUses(tm.usage, u1), u2)];
+    }
+    if (tm.tag === 'UpdateWorld') {
+        const [type] = check(local, tm.type, values_1.VType);
+        const ty = values_1.evaluate(type, local.vs);
+        const [cont, u] = check(local, tm.cont, values_1.VPi(usage_1.UsageRig.one, '_', values_1.VWorld, _ => values_1.VSigma(tm.usage, '_', ty, _ => values_1.VWorld)));
+        return [core_1.UpdateWorld(tm.usage, type, cont), ty, usage_1.multiplyUses(tm.usage, u)];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
@@ -767,8 +843,12 @@ const expr = (t, fromRepl) => {
             return [surface_1.Type, false];
         if (x === 'Void')
             return [surface_1.Void, false];
+        if (x === 'World')
+            return [surface_1.World, false];
         if (x === '*')
             return [surface_1.Unit, false];
+        if (x[0] === '_')
+            return [surface_1.Hole(x.slice(1)), false];
         if (/[a-z]/i.test(x[0]))
             return [surface_1.Var(x), false];
         return utils_1.serr(`invalid name: ${x}`);
@@ -941,6 +1021,45 @@ const exprs = (ts, br, fromRepl) => {
         const [caseLeft] = expr(ts[j + 2], fromRepl);
         const [caseRight] = expr(ts[j + 3], fromRepl);
         return surface_1.IndSum(u, motive, scrut, caseLeft, caseRight);
+    }
+    if (isName(ts[0], 'Fix')) {
+        const sig = exprs(ts.slice(1), br, fromRepl);
+        return surface_1.Fix(sig);
+    }
+    if (isName(ts[0], 'Con')) {
+        const val = exprs(ts.slice(1), br, fromRepl);
+        return surface_1.Con(val);
+    }
+    if (isName(ts[0], 'indFix')) {
+        let j = 1;
+        let u = usage(ts[1]);
+        if (u) {
+            j = 2;
+        }
+        else {
+            u = usage_1.UsageRig.default;
+        }
+        if (ts.length !== 3 + j)
+            return utils_1.serr(`indFix expects exactly 3 arguments`);
+        const [motive] = expr(ts[j], fromRepl);
+        const [scrut] = expr(ts[j + 1], fromRepl);
+        const [cas] = expr(ts[j + 2], fromRepl);
+        return surface_1.IndFix(u, motive, scrut, cas);
+    }
+    if (isName(ts[0], 'updateWorld')) {
+        let j = 1;
+        let u = usage(ts[1]);
+        if (u) {
+            j = 2;
+        }
+        else {
+            u = usage_1.UsageRig.default;
+        }
+        if (ts.length !== 3 + j)
+            return utils_1.serr(`updateWorld expects exactly 2 arguments`);
+        const [type] = expr(ts[j], fromRepl);
+        const [cont] = expr(ts[j + 1], fromRepl);
+        return surface_1.UpdateWorld(u, type, cont);
     }
     const j = ts.findIndex(x => isName(x, '->'));
     if (j >= 0) {
@@ -1357,7 +1476,7 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":9,"./usage":10,"./values":13,"./verification":14}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Hole = exports.UpdateWorld = exports.World = exports.IndFix = exports.Con = exports.Fix = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const names_1 = require("./names");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
@@ -1393,6 +1512,17 @@ const Inj = (which, val) => ({ tag: 'Inj', which, val });
 exports.Inj = Inj;
 const IndSum = (usage, motive, scrut, caseLeft, caseRight) => ({ tag: 'IndSum', usage, motive, scrut, caseLeft, caseRight });
 exports.IndSum = IndSum;
+const Fix = (sig) => ({ tag: 'Fix', sig });
+exports.Fix = Fix;
+const Con = (val) => ({ tag: 'Con', val });
+exports.Con = Con;
+const IndFix = (usage, motive, scrut, cas) => ({ tag: 'IndFix', usage, motive, scrut, cas });
+exports.IndFix = IndFix;
+exports.World = { tag: 'World' };
+const UpdateWorld = (usage, type, cont) => ({ tag: 'UpdateWorld', usage, type, cont });
+exports.UpdateWorld = UpdateWorld;
+const Hole = (name) => ({ tag: 'Hole', name });
+exports.Hole = Hole;
 const flattenPi = (t) => {
     const params = [];
     let c = t;
@@ -1454,7 +1584,7 @@ const flattenSum = (t) => {
 };
 exports.flattenSum = flattenSum;
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
-const isSimple = (t) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair';
+const isSimple = (t) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair' || t.tag === 'World';
 const showS = (t) => showP(!isSimple(t), t);
 const show = (t) => {
     if (t.tag === 'Type')
@@ -1501,6 +1631,18 @@ const show = (t) => {
         return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
     if (t.tag === 'IndSigma')
         return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+    if (t.tag === 'Fix')
+        return `Fix ${showS(t.sig)}`;
+    if (t.tag === 'Con')
+        return `Con ${showS(t.val)}`;
+    if (t.tag === 'IndFix')
+        return `indFix ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+    if (t.tag === 'World')
+        return 'World';
+    if (t.tag === 'UpdateWorld')
+        return `updateWorld ${t.usage} ${showS(t.type)} ${showS(t.cont)}`;
+    if (t.tag === 'Hole')
+        return `_${t.name}`;
     return t;
 };
 exports.show = show;
@@ -1547,6 +1689,18 @@ const fromCore = (t, ns = list_1.Nil) => {
         return exports.IndSigma(exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.cas, ns));
     if (t.tag === 'IndSum')
         return exports.IndSum(t.usage, exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.caseLeft, ns), exports.fromCore(t.caseRight, ns));
+    if (t.tag === 'Fix')
+        return exports.Fix(exports.fromCore(t.sig, ns));
+    if (t.tag === 'Con')
+        return exports.Fix(exports.fromCore(t.sig, ns));
+    if (t.tag === 'IndFix')
+        return exports.IndFix(t.usage, exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.cas, ns));
+    if (t.tag === 'World')
+        return exports.World;
+    if (t.tag === 'WorldToken')
+        return exports.Var('WorldToken');
+    if (t.tag === 'UpdateWorld')
+        return exports.UpdateWorld(t.usage, exports.fromCore(t.type, ns), exports.fromCore(t.cont, ns));
     return t;
 };
 exports.fromCore = fromCore;
@@ -1857,11 +2011,12 @@ exports.eqArr = eqArr;
 },{"fs":16}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vindsum = exports.vindsigma = exports.vindunit = exports.vindvoid = exports.vapp = exports.vinst = exports.VVar = exports.VInj = exports.VSum = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EIndSum = exports.EIndSigma = exports.EIndUnit = exports.EIndVoid = exports.EApp = exports.HVar = void 0;
+exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vindfix = exports.vindsum = exports.vindsigma = exports.vindunit = exports.vindvoid = exports.vapp = exports.vinst = exports.VVar = exports.VWorldToken = exports.VWorld = exports.VCon = exports.VFix = exports.VInj = exports.VSum = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EIndFix = exports.EIndSum = exports.EIndSigma = exports.EIndUnit = exports.EIndVoid = exports.EApp = exports.HVar = void 0;
 const core_1 = require("./core");
 const C = require("./core");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
+const usage_1 = require("./usage");
 const HVar = (level) => ({ tag: 'HVar', level });
 exports.HVar = HVar;
 const EApp = (arg) => ({ tag: 'EApp', arg });
@@ -1874,6 +2029,8 @@ const EIndSigma = (motive, cas) => ({ tag: 'EIndSigma', motive, cas });
 exports.EIndSigma = EIndSigma;
 const EIndSum = (usage, motive, caseLeft, caseRight) => ({ tag: 'EIndSum', usage, motive, caseLeft, caseRight });
 exports.EIndSum = EIndSum;
+const EIndFix = (usage, motive, cas) => ({ tag: 'EIndFix', usage, motive, cas });
+exports.EIndFix = EIndFix;
 exports.VType = { tag: 'VType' };
 const VNe = (head, spine) => ({ tag: 'VNe', head, spine });
 exports.VNe = VNe;
@@ -1892,6 +2049,12 @@ const VSum = (left, right) => ({ tag: 'VSum', left, right });
 exports.VSum = VSum;
 const VInj = (which, left, right, val) => ({ tag: 'VInj', which, left, right, val });
 exports.VInj = VInj;
+const VFix = (sig) => ({ tag: 'VFix', sig });
+exports.VFix = VFix;
+const VCon = (sig, val) => ({ tag: 'VCon', sig, val });
+exports.VCon = VCon;
+exports.VWorld = { tag: 'VWorld' };
+exports.VWorldToken = { tag: 'VWorldToken' };
 const VVar = (level, spine = list_1.Nil) => exports.VNe(exports.HVar(level), spine);
 exports.VVar = VVar;
 const vinst = (val, arg) => val.clos(arg);
@@ -1934,6 +2097,16 @@ const vindsum = (usage, motive, scrut, caseLeft, caseRight) => {
     return utils_1.impossible(`vindsum: ${scrut.tag}`);
 };
 exports.vindsum = vindsum;
+const vindfix = (usage, motive, scrut, cas) => {
+    if (scrut.tag === 'VCon') {
+        // indFix q P (Con f x) c ~> c (\(q z : Fix f). indFix q P z c) x
+        return exports.vapp(exports.vapp(cas, exports.VAbs(usage, 'z', exports.VFix(scrut.sig), z => exports.vindfix(usage, motive, z, cas))), scrut.val);
+    }
+    if (scrut.tag === 'VNe')
+        return exports.VNe(scrut.head, list_1.Cons(exports.EIndFix(usage, motive, cas), scrut.spine));
+    return utils_1.impossible(`vindfix: ${scrut.tag}`);
+};
+exports.vindfix = vindfix;
 const evaluate = (t, vs) => {
     if (t.tag === 'Type')
         return exports.VType;
@@ -1969,6 +2142,21 @@ const evaluate = (t, vs) => {
         return exports.vindsigma(exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.cas, vs));
     if (t.tag === 'IndSum')
         return exports.vindsum(t.usage, exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.caseLeft, vs), exports.evaluate(t.caseRight, vs));
+    if (t.tag === 'World')
+        return exports.VWorld;
+    if (t.tag === 'Fix')
+        return exports.VFix(exports.evaluate(t.sig, vs));
+    if (t.tag === 'Con')
+        return exports.VCon(exports.evaluate(t.sig, vs), exports.evaluate(t.val, vs));
+    if (t.tag === 'WorldToken')
+        return exports.VWorldToken;
+    if (t.tag === 'IndFix')
+        return exports.vindfix(t.usage, exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.cas, vs));
+    if (t.tag === 'UpdateWorld') {
+        // updateWorld q A c ~> indSigma (\_. A) (c WorldToken) (\x y. x)
+        const ty = exports.evaluate(t.type, vs);
+        return exports.vindsigma(exports.VAbs(usage_1.UsageRig.default, '_', exports.VSigma(t.usage, '_', ty, _ => exports.VWorld), _ => ty), exports.vapp(exports.evaluate(t.cont, vs), exports.VWorldToken), exports.VAbs(t.usage, 'x', ty, x => exports.VAbs(usage_1.UsageRig.one, 'w', exports.VWorld, _ => x)));
+    }
     return t;
 };
 exports.evaluate = evaluate;
@@ -1988,6 +2176,8 @@ const quoteElim = (t, e, k) => {
         return core_1.IndSigma(exports.quote(e.motive, k), t, exports.quote(e.cas, k));
     if (e.tag === 'EIndSum')
         return core_1.IndSum(e.usage, exports.quote(e.motive, k), t, exports.quote(e.caseLeft, k), exports.quote(e.caseRight, k));
+    if (e.tag === 'EIndFix')
+        return core_1.IndFix(e.usage, exports.quote(e.motive, k), t, exports.quote(e.cas, k));
     return e;
 };
 const quote = (v, k) => {
@@ -2013,6 +2203,14 @@ const quote = (v, k) => {
         return core_1.Sum(exports.quote(v.left, k), exports.quote(v.right, k));
     if (v.tag === 'VInj')
         return core_1.Inj(v.which, exports.quote(v.left, k), exports.quote(v.right, k), exports.quote(v.val, k));
+    if (v.tag === 'VCon')
+        return core_1.Con(exports.quote(v.sig, k), exports.quote(v.val, k));
+    if (v.tag === 'VFix')
+        return core_1.Fix(exports.quote(v.sig, k));
+    if (v.tag === 'VWorld')
+        return core_1.World;
+    if (v.tag === 'VWorldToken')
+        return core_1.WorldToken;
     return v;
 };
 exports.quote = quote;
@@ -2021,7 +2219,7 @@ exports.normalize = normalize;
 const show = (v, k) => C.show(exports.quote(v, k));
 exports.show = show;
 
-},{"./core":3,"./utils/list":11,"./utils/utils":12}],14:[function(require,module,exports){
+},{"./core":3,"./usage":10,"./utils/list":11,"./utils/utils":12}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verify = exports.unsafeLocalPop = exports.localExtend = exports.localEmpty = exports.Local = exports.EntryT = void 0;
@@ -2179,7 +2377,39 @@ const synth = (local, tm) => {
         }
         return [values_1.vapp(motive, values_1.evaluate(tm.scrut, local.vs)), usage_1.addUses(usage_1.multiplyUses(tm.usage, u1), u2)];
     }
-    return utils_1.terr(`unable to synth ${core_1.show(tm)}`);
+    if (tm.tag === 'World')
+        return [values_1.VType, usage_1.noUses(local.level)];
+    if (tm.tag === 'WorldToken')
+        return [values_1.VWorld, usage_1.noUses(local.level)];
+    if (tm.tag === 'Fix') {
+        const u = check(local, tm.sig, values_1.VPi(usage_1.UsageRig.default, '_', values_1.VType, _ => values_1.VType));
+        return [values_1.VType, u];
+    }
+    if (tm.tag === 'Con') {
+        check(local, tm.sig, values_1.VPi(usage_1.UsageRig.default, '_', values_1.VType, _ => values_1.VType));
+        const vsig = values_1.evaluate(tm.sig, local.vs);
+        const u = check(local, tm.val, values_1.vapp(vsig, values_1.VFix(vsig)));
+        return [values_1.VFix(vsig), u];
+    }
+    if (tm.tag === 'IndFix') {
+        if (!usage_1.UsageRig.sub(usage_1.UsageRig.one, tm.usage))
+            return utils_1.terr(`usage must be 1 <= q in fix induction ${core_1.show(tm)}: ${tm.usage}`);
+        const [fixty, u1] = synth(local, tm.scrut);
+        if (fixty.tag !== 'VFix')
+            return utils_1.terr(`not a fix type in ${core_1.show(tm)}: ${showVal(local, fixty)}`);
+        check(local, tm.motive, values_1.VPi(usage_1.UsageRig.default, '_', fixty, _ => values_1.VType));
+        const vmotive = values_1.evaluate(tm.motive, local.vs);
+        // ((q z : Fix f) -> P z) -> (q y : f (Fix f)) -> P (Con f y)
+        const u2 = check(local, tm.cas, values_1.VPi(usage_1.UsageRig.default, '_', values_1.VPi(tm.usage, 'z', fixty, z => values_1.vapp(vmotive, z)), _ => values_1.VPi(tm.usage, 'y', values_1.vapp(fixty.sig, fixty), y => values_1.vapp(vmotive, values_1.VCon(fixty.sig, y)))));
+        return [values_1.vapp(vmotive, values_1.evaluate(tm.scrut, local.vs)), usage_1.addUses(usage_1.multiplyUses(tm.usage, u1), u2)];
+    }
+    if (tm.tag === 'UpdateWorld') {
+        check(local, tm.type, values_1.VType);
+        const ty = values_1.evaluate(tm.type, local.vs);
+        const u = check(local, tm.cont, values_1.VPi(usage_1.UsageRig.one, '_', values_1.VWorld, _ => values_1.VSigma(tm.usage, '_', ty, _ => values_1.VWorld)));
+        return [ty, usage_1.multiplyUses(tm.usage, u)];
+    }
+    return tm;
 };
 const synthapp = (local, ty, arg) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @ ${core_1.show(arg)}`);

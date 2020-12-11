@@ -1,9 +1,9 @@
 import { log } from './config';
-import { Abs, App, IndSigma, IndSum, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
+import { Abs, App, Con, Fix, IndFix, IndSigma, IndSum, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, UpdateWorld, Var, Void, World } from './core';
 import { Ix, Name } from './names';
 import { Cons, filter, index, indexOf, List, Nil, range, toArray, uncons, updateAt, zipWith } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp, VUnit, VInj, VPair } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp, VUnit, VInj, VPair, VWorld, VCon } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
@@ -45,6 +45,7 @@ const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
   log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
   if (tm.tag === 'Type' && ty.tag === 'VType') return [Type, noUses(local.level)];
   if (tm.tag === 'Void' && ty.tag === 'VType') return [Void, noUses(local.level)];
+  if (tm.tag === 'World' && ty.tag === 'VType') return [World, noUses(local.level)];
   if (tm.tag === 'UnitType' && ty.tag === 'VType') return [UnitType, noUses(local.level)];
   if (tm.tag === 'Unit' && ty.tag === 'VUnitType') return [Unit, noUses(local.level)];
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
@@ -64,6 +65,20 @@ const check = (local: Local, tm: S.Term, ty: Val): [Term, Uses] => {
   if (tm.tag === 'Inj' && ty.tag === 'VSum') {
     const [val, u] = check(local, tm.val, tm.which === 'Left' ? ty.left : ty.right);
     return [Inj(tm.which, quote(ty.left, local.level), quote(ty.right, local.level), val), u];
+  }
+  if (tm.tag === 'Con' && ty.tag === 'VFix') {
+    const [val, u] = check(local, tm.val, vapp(ty.sig, ty));
+    return [Con(quote(ty.sig, local.level), val), u];
+  }
+  if (tm.tag === 'Hole') {
+    const res: string[] = [];
+    for (let i = 0; i < local.level; i++) {
+      const entry = index(local.ts, i);
+      const name = index(local.ns, i);
+      const value = index(local.vs, i);
+      res.push(`${entry ? entry.usage : '?'} ${name} : ${entry && entry.type ? showVal(local, entry.type) : '?'} = ${value ? showVal(local, value) : '?'}`);
+    }
+    return terr(`hole _${tm.name} : ${showVal(local, ty)} in ${res.join('; ')}`);
   }
   if (tm.tag === 'Let') {
     let vtype: Term;
@@ -212,6 +227,28 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
       return terr(`usage mismatch in sum branches ${show(tm)}: ${wrongVars.join('; ')}`);
     }
     return [IndSum(tm.usage, motive, scrut, caseLeft, caseRight), vapp(vmotive, evaluate(scrut, local.vs)), addUses(multiplyUses(tm.usage, u1), u2)];
+  }
+  if (tm.tag === 'World') return [World, VType, noUses(local.level)];
+  if (tm.tag === 'Fix') {
+    const [sig, u] = check(local, tm.sig, VPi(UsageRig.default, '_', VType, _ => VType));
+    return [Fix(sig), VType, u];
+  }
+  if (tm.tag === 'IndFix') {
+    if (!UsageRig.sub(UsageRig.one, tm.usage))
+      return terr(`usage must be 1 <= q in fix induction ${show(tm)}: ${tm.usage}`)
+    const [scrut, fixty, u1] = synth(local, tm.scrut);
+    if (fixty.tag !== 'VFix') return terr(`not a fix type in ${show(tm)}: ${showVal(local, fixty)}`);
+    const [motive] = check(local, tm.motive, VPi(UsageRig.default, '_', fixty, _ => VType));
+    const vmotive = evaluate(motive, local.vs);
+    // ((q z : Fix f) -> P z) -> (q y : f (Fix f)) -> P (Con f y)
+    const [cas, u2] = check(local, tm.cas, VPi(UsageRig.default, '_', VPi(tm.usage, 'z', fixty, z => vapp(vmotive, z)), _ => VPi(tm.usage, 'y', vapp(fixty.sig, fixty), y => vapp(vmotive, VCon(fixty.sig, y)))));
+    return [IndFix(tm.usage, motive, scrut, cas), vapp(vmotive, evaluate(scrut, local.vs)), addUses(multiplyUses(tm.usage, u1), u2)];
+  }
+  if (tm.tag === 'UpdateWorld') {
+    const [type] = check(local, tm.type, VType);
+    const ty = evaluate(type, local.vs);
+    const [cont, u] = check(local, tm.cont, VPi(UsageRig.one, '_', VWorld, _ => VSigma(tm.usage, '_', ty, _ => VWorld)));
+    return [UpdateWorld(tm.usage, type, cont), ty, multiplyUses(tm.usage, u)];
   }
   return terr(`unable to synth ${show(tm)}`);
 };

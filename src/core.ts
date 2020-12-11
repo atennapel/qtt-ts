@@ -1,34 +1,16 @@
 import { Ix, Name } from './names';
 import { Usage, UsageRig } from './usage';
 
-/*
-u ::= elements of partially ordered semigroup
-
-t ::=
-  Type                -- universe
-  x                   -- variable
-  (u x : t) -> t      -- pi/function type
-  \(u x : t). t       -- lambda
-  t t                 -- application
-  let u x : t = t; t  -- let
-
-  Void                -- void/empty type
-  indVoid P x         -- void induction
-
-  ()                  -- unit type
-  *                   -- unit value
-  indUnit P x p       -- unit induction
-
-  (u x : t) ** t      -- sigma/pair type
-  (t, t : t)          -- pair
-  indSigma u t t t    -- sigma induction
-
-  t ++ t              -- sum type
-  Left t t t          -- left injection
-  Right t t t         -- right injection
-  indSum u t t t t    -- sum induction
-*/
-export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | IndSigma | Sum | Inj | IndSum;
+export type Term =
+  Type | Var |
+  Pi | Abs | App |
+  Let |
+  Void | IndVoid |
+  UnitType | Unit | IndUnit |
+  Sigma | Pair | IndSigma |
+  Sum | Inj | IndSum |
+  Fix | Con | IndFix |
+  World | WorldToken | UpdateWorld;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -64,6 +46,18 @@ export interface Inj { readonly tag: 'Inj'; readonly which: 'Left' | 'Right'; re
 export const Inj = (which: 'Left' | 'Right', left: Term, right: Term, val: Term): Inj => ({ tag: 'Inj', which, left, right, val });
 export interface IndSum { readonly tag: 'IndSum'; readonly usage: Usage; readonly motive: Term; readonly scrut: Term; readonly caseLeft: Term; readonly caseRight: Term }
 export const IndSum = (usage: Usage, motive: Term, scrut: Term, caseLeft: Term, caseRight: Term): IndSum => ({ tag: 'IndSum', usage, motive, scrut, caseLeft, caseRight });
+export interface Fix { readonly tag: 'Fix'; readonly sig: Term }
+export const Fix = (sig: Term): Fix => ({ tag: 'Fix', sig });
+export interface Con { readonly tag: 'Con'; readonly sig: Term; readonly val: Term }
+export const Con = (sig: Term, val: Term): Con => ({ tag: 'Con', sig, val });
+export interface IndFix { readonly tag: 'IndFix'; readonly usage: Usage; readonly motive: Term; readonly scrut: Term; readonly cas: Term }
+export const IndFix = (usage: Usage, motive: Term, scrut: Term, cas: Term): IndFix => ({ tag: 'IndFix', usage, motive, scrut, cas });
+export interface World { readonly tag: 'World' }
+export const World: World = { tag: 'World' }
+export interface WorldToken { readonly tag: 'WorldToken' }
+export const WorldToken: WorldToken = { tag: 'WorldToken' };
+export interface UpdateWorld { readonly tag: 'UpdateWorld'; readonly usage: Usage; readonly type: Term; readonly cont: Term }
+export const UpdateWorld = (usage: Usage, type: Term, cont: Term): UpdateWorld => ({ tag: 'UpdateWorld', usage, type, cont });
 
 export const flattenPi = (t: Term): [[Usage, Name, Term][], Term] => {
   const params: [Usage, Name, Term][] = [];
@@ -121,7 +115,7 @@ export const flattenSum = (t: Term): Term[] => {
 };
 
 const showP = (b: boolean, t: Term) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair';
+const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair' || t.tag === 'World' || t.tag === 'WorldToken';
 const showS = (t: Term) => showP(!isSimple(t), t);
 export const show = (t: Term): string => {
   if (t.tag === 'Type') return 'Type';
@@ -163,5 +157,14 @@ export const show = (t: Term): string => {
     return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
   if (t.tag === 'IndSigma')
     return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+  if (t.tag === 'Fix')
+    return `Fix ${showS(t.sig)}`;
+  if (t.tag === 'Con')
+    return `Con ${showS(t.sig)} ${showS(t.val)}`;
+  if (t.tag === 'IndFix')
+    return `indFix ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+  if (t.tag === 'World') return 'World';
+  if (t.tag === 'WorldToken') return 'WorldToken';
+  if (t.tag === 'UpdateWorld') return `updateWorld ${t.usage} ${showS(t.type)} ${showS(t.cont)}`;
   return t;
 };

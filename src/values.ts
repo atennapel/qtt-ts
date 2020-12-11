@@ -1,9 +1,9 @@
-import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair, Sum, Inj, IndVoid, IndUnit, IndSigma, IndSum } from './core';
+import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair, Sum, Inj, IndVoid, IndUnit, IndSigma, IndSum, IndFix, Con, Fix, World, WorldToken } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
-import { Usage } from './usage';
+import { Usage, UsageRig } from './usage';
 
 export type Lvl = number;
 
@@ -12,7 +12,7 @@ export type Head = HVar;
 export interface HVar { readonly tag: 'HVar'; readonly level: Lvl }
 export const HVar = (level: Lvl): HVar => ({ tag: 'HVar', level });
 
-export type Elim = EApp | EIndVoid | EIndUnit | EIndSigma | EIndSum;
+export type Elim = EApp | EIndVoid | EIndUnit | EIndSigma | EIndSum | EIndFix;
 
 export interface EApp { readonly tag: 'EApp'; readonly arg: Val }
 export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
@@ -24,12 +24,14 @@ export interface EIndSigma { readonly tag: 'EIndSigma'; readonly motive: Val; re
 export const EIndSigma = (motive: Val, cas: Val): EIndSigma => ({ tag: 'EIndSigma', motive, cas });
 export interface EIndSum { readonly tag: 'EIndSum'; readonly usage: Usage; readonly motive: Val; readonly caseLeft: Val; readonly caseRight: Val }
 export const EIndSum = (usage: Usage, motive: Val, caseLeft: Val, caseRight: Val): EIndSum => ({ tag: 'EIndSum', usage, motive, caseLeft, caseRight });
+export interface EIndFix { readonly tag: 'EIndFix'; readonly usage: Usage; readonly motive: Val; readonly cas: Val }
+export const EIndFix = (usage: Usage, motive: Val, cas: Val): EIndFix => ({ tag: 'EIndFix', usage, motive, cas });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VType | VNe | VAbs | VPi | VVoid | VUnitType | VUnit | VSigma | VPair | VSum | VInj;
+export type Val = VType | VNe | VAbs | VPi | VVoid | VUnitType | VUnit | VSigma | VPair | VSum | VInj | VFix | VCon | VWorld | VWorldToken;
 
 export interface VType { readonly tag: 'VType' }
 export const VType: VType = { tag: 'VType' };
@@ -53,6 +55,14 @@ export interface VSum { readonly tag: 'VSum'; readonly left: Val; readonly right
 export const VSum = (left: Val, right: Val): VSum => ({ tag: 'VSum', left, right });
 export interface VInj { readonly tag: 'VInj'; readonly which: 'Left' | 'Right'; readonly left: Val; readonly right: Val; readonly val: Val }
 export const VInj = (which: 'Left' | 'Right', left: Val, right: Val, val: Val): VInj => ({ tag: 'VInj', which, left, right, val });
+export interface VFix { readonly tag: 'VFix'; readonly sig: Val }
+export const VFix = (sig: Val): VFix => ({ tag: 'VFix', sig });
+export interface VCon { readonly tag: 'VCon'; readonly sig: Val; readonly val: Val }
+export const VCon = (sig: Val, val: Val): VCon => ({ tag: 'VCon', sig, val });
+export interface VWorld { readonly tag: 'VWorld' }
+export const VWorld: VWorld = { tag: 'VWorld' }
+export interface VWorldToken { readonly tag: 'VWorldToken' }
+export const VWorldToken: VWorldToken = { tag: 'VWorldToken' };
 
 export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' | 'VSigma' };
 
@@ -65,24 +75,32 @@ export const vapp = (left: Val, right: Val): Val => {
   if (left.tag === 'VNe') return VNe(left.head, Cons(EApp(right), left.spine));
   return impossible(`vapp: ${left.tag}`);
 };
-export const vindvoid = (motive: Val, scrut: Val) => {
+export const vindvoid = (motive: Val, scrut: Val): Val => {
   if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndVoid(motive), scrut.spine));
   return impossible(`vindvoid: ${scrut.tag}`);
 };
-export const vindunit = (motive: Val, scrut: Val, cas: Val) => {
+export const vindunit = (motive: Val, scrut: Val, cas: Val): Val => {
   if (scrut.tag === 'VUnit') return cas;
   if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndUnit(motive, cas), scrut.spine));
   return impossible(`vindunit: ${scrut.tag}`);
 };
-export const vindsigma = (motive: Val, scrut: Val, cas: Val) => {
+export const vindsigma = (motive: Val, scrut: Val, cas: Val): Val => {
   if (scrut.tag === 'VPair') return vapp(vapp(cas, scrut.fst), scrut.snd);
   if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndSigma(motive, cas), scrut.spine));
   return impossible(`vindsigma: ${scrut.tag}`);
 };
-export const vindsum = (usage: Usage, motive: Val, scrut: Val, caseLeft: Val, caseRight: Val) => {
+export const vindsum = (usage: Usage, motive: Val, scrut: Val, caseLeft: Val, caseRight: Val): Val => {
   if (scrut.tag === 'VInj') return vapp(scrut.which === 'Left' ? caseLeft : caseRight, scrut.val);
   if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndSum(usage, motive, caseLeft, caseRight), scrut.spine));
   return impossible(`vindsum: ${scrut.tag}`);
+};
+export const vindfix = (usage: Usage, motive: Val, scrut: Val, cas: Val): Val => {
+  if (scrut.tag === 'VCon') {
+    // indFix q P (Con f x) c ~> c (\(q z : Fix f). indFix q P z c) x
+    return vapp(vapp(cas, VAbs(usage, 'z', VFix(scrut.sig), z => vindfix(usage, motive, z, cas))), scrut.val);
+  }
+  if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndFix(usage, motive, cas), scrut.spine));
+  return impossible(`vindfix: ${scrut.tag}`);
 };
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
@@ -116,6 +134,16 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return vindsigma(evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.cas, vs));
   if (t.tag === 'IndSum')
     return vindsum(t.usage, evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.caseLeft, vs), evaluate(t.caseRight, vs));
+  if (t.tag === 'World') return VWorld;
+  if (t.tag === 'Fix') return VFix(evaluate(t.sig, vs));
+  if (t.tag === 'Con') return VCon(evaluate(t.sig, vs), evaluate(t.val, vs));
+  if (t.tag === 'WorldToken') return VWorldToken;
+  if (t.tag === 'IndFix') return vindfix(t.usage, evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.cas, vs));
+  if (t.tag === 'UpdateWorld') {
+    // updateWorld q A c ~> indSigma (\_. A) (c WorldToken) (\x y. x)
+    const ty = evaluate(t.type, vs);
+    return vindsigma(VAbs(UsageRig.default, '_', VSigma(t.usage, '_', ty, _ => VWorld), _ => ty), vapp(evaluate(t.cont, vs), VWorldToken), VAbs(t.usage, 'x', ty, x => VAbs(UsageRig.one, 'w', VWorld, _ => x)));
+  }
   return t;
 };
 
@@ -129,6 +157,7 @@ const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
   if (e.tag === 'EIndUnit') return IndUnit(quote(e.motive, k), t, quote(e.cas, k));
   if (e.tag === 'EIndSigma') return IndSigma(quote(e.motive, k), t, quote(e.cas, k));
   if (e.tag === 'EIndSum') return IndSum(e.usage, quote(e.motive, k), t, quote(e.caseLeft, k), quote(e.caseRight, k));
+  if (e.tag === 'EIndFix') return IndFix(e.usage, quote(e.motive, k), t, quote(e.cas, k));
   return e;
 };
 export const quote = (v: Val, k: Ix): Term => {
@@ -154,6 +183,12 @@ export const quote = (v: Val, k: Ix): Term => {
     return Sum(quote(v.left, k), quote(v.right, k));
   if (v.tag === 'VInj')
     return Inj(v.which, quote(v.left, k), quote(v.right, k), quote(v.val, k));
+  if (v.tag === 'VCon')
+    return Con(quote(v.sig, k), quote(v.val, k));
+  if (v.tag === 'VFix')
+    return Fix(quote(v.sig, k));
+  if (v.tag === 'VWorld') return World;
+  if (v.tag === 'VWorldToken') return WorldToken;
   return v;
 };
 

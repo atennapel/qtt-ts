@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid, IndUnit, IndSum, IndSigma } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid, IndUnit, IndSum, IndSigma, Con, Fix, IndFix, Hole, World, UpdateWorld } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -195,7 +195,9 @@ const expr = (t: Token, fromRepl: boolean): [Term, boolean] => {
     const x = t.name;
     if (x === 'Type') return [Type, false];
     if (x === 'Void') return [Void, false];
+    if (x === 'World') return [World, false];
     if (x === '*') return [Unit, false];
+    if (x[0] === '_') return [Hole(x.slice(1)), false];
     if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
   }
@@ -335,6 +337,33 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
     const [caseLeft] = expr(ts[j + 2], fromRepl);
     const [caseRight] = expr(ts[j + 3], fromRepl);
     return IndSum(u, motive, scrut, caseLeft, caseRight);
+  }
+  if (isName(ts[0], 'Fix')) {
+    const sig = exprs(ts.slice(1), br, fromRepl);
+    return Fix(sig);
+  }
+  if (isName(ts[0], 'Con')) {
+    const val = exprs(ts.slice(1), br, fromRepl);
+    return Con(val);
+  }
+  if (isName(ts[0], 'indFix')) {
+    let j = 1;
+    let u = usage(ts[1]);
+    if (u) { j = 2 } else { u = UsageRig.default }
+    if (ts.length !== 3 + j) return serr(`indFix expects exactly 3 arguments`);
+    const [motive] = expr(ts[j], fromRepl);
+    const [scrut] = expr(ts[j + 1], fromRepl);
+    const [cas] = expr(ts[j + 2], fromRepl);
+    return IndFix(u, motive, scrut, cas);
+  }
+  if (isName(ts[0], 'updateWorld')) {
+    let j = 1;
+    let u = usage(ts[1]);
+    if (u) { j = 2 } else { u = UsageRig.default }
+    if (ts.length !== 3 + j) return serr(`updateWorld expects exactly 2 arguments`);
+    const [type] = expr(ts[j], fromRepl);
+    const [cont] = expr(ts[j + 1], fromRepl);
+    return UpdateWorld(u, type, cont);
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {

@@ -5,7 +5,17 @@ import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
 import { Usage, UsageRig } from './usage';
 
-export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | Sum | Inj | IndSum | IndSigma;
+export type Term =
+  Type | Var |
+  Pi | Abs | App |
+  Let |
+  Void | IndVoid |
+  UnitType |  Unit | IndUnit |
+  Sigma | Pair | IndSigma |
+  Sum | Inj | IndSum |
+  Fix | Con | IndFix |
+  World | UpdateWorld |
+  Hole;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -41,6 +51,19 @@ export interface Inj { readonly tag: 'Inj'; readonly which: 'Left' | 'Right'; re
 export const Inj = (which: 'Left' | 'Right', val: Term): Inj => ({ tag: 'Inj', which, val });
 export interface IndSum { readonly tag: 'IndSum'; readonly usage: Usage; readonly motive: Term; readonly scrut: Term; readonly caseLeft: Term; readonly caseRight: Term }
 export const IndSum = (usage: Usage, motive: Term, scrut: Term, caseLeft: Term, caseRight: Term): IndSum => ({ tag: 'IndSum', usage, motive, scrut, caseLeft, caseRight });
+export interface Fix { readonly tag: 'Fix'; readonly sig: Term }
+export const Fix = (sig: Term): Fix => ({ tag: 'Fix', sig });
+export interface Con { readonly tag: 'Con'; readonly val: Term }
+export const Con = (val: Term): Con => ({ tag: 'Con', val });
+export interface IndFix { readonly tag: 'IndFix'; readonly usage: Usage; readonly motive: Term; readonly scrut: Term; readonly cas: Term }
+export const IndFix = (usage: Usage, motive: Term, scrut: Term, cas: Term): IndFix => ({ tag: 'IndFix', usage, motive, scrut, cas });
+export interface World { readonly tag: 'World' }
+export const World: World = { tag: 'World' }
+export interface UpdateWorld { readonly tag: 'UpdateWorld'; readonly usage: Usage; readonly type: Term; readonly cont: Term }
+export const UpdateWorld = (usage: Usage, type: Term, cont: Term): UpdateWorld => ({ tag: 'UpdateWorld', usage, type, cont });
+
+export interface Hole { readonly tag: 'Hole'; readonly name: Name }
+export const Hole = (name: Name): Hole => ({ tag: 'Hole', name });
 
 export const flattenPi = (t: Term): [[Usage, Name, Term][], Term] => {
   const params: [Usage, Name, Term][] = [];
@@ -98,7 +121,7 @@ export const flattenSum = (t: Term): Term[] => {
 };
 
 const showP = (b: boolean, t: Term) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair';
+const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair' || t.tag === 'World';
 const showS = (t: Term) => showP(!isSimple(t), t);
 export const show = (t: Term): string => {
   if (t.tag === 'Type') return 'Type';
@@ -140,6 +163,15 @@ export const show = (t: Term): string => {
     return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
   if (t.tag === 'IndSigma')
     return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+  if (t.tag === 'Fix')
+    return `Fix ${showS(t.sig)}`;
+  if (t.tag === 'Con')
+    return `Con ${showS(t.val)}`;
+  if (t.tag === 'IndFix')
+    return `indFix ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+  if (t.tag === 'World') return 'World';
+  if (t.tag === 'UpdateWorld') return `updateWorld ${t.usage} ${showS(t.type)} ${showS(t.cont)}`;
+  if (t.tag === 'Hole') return `_${t.name}`;
   return t;
 };
 
@@ -174,6 +206,12 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'IndSigma') return IndSigma(fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
   if (t.tag === 'IndSum')
     return IndSum(t.usage, fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.caseLeft, ns), fromCore(t.caseRight, ns));
+  if (t.tag === 'Fix') return Fix(fromCore(t.sig, ns));
+  if (t.tag === 'Con') return Fix(fromCore(t.sig, ns));
+  if (t.tag === 'IndFix') return IndFix(t.usage, fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
+  if (t.tag === 'World') return World;
+  if (t.tag === 'WorldToken') return Var('WorldToken');
+  if (t.tag === 'UpdateWorld') return UpdateWorld(t.usage, fromCore(t.type, ns), fromCore(t.cont, ns));
   return t;
 };
 

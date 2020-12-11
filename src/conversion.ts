@@ -27,6 +27,10 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
     conv(k, a.caseLeft, b.caseLeft);
     return conv(k, a.caseRight, b.caseRight);
   }
+  if (a.tag === 'EIndFix' && b.tag === 'EIndFix' && a.usage === b.usage) {
+    conv(k, a.motive, b.motive);
+    return conv(k, a.cas, b.cas);
+  }
   return terr(`conv failed (${k}): ${show(x, k)} ~ ${show(y, k)}`);
 };
 export const conv = (k: Ix, a: Val, b: Val): void => {
@@ -35,6 +39,8 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
   if (a.tag === 'VVoid' && b.tag === 'VVoid') return;
   if (a.tag === 'VUnitType' && b.tag === 'VUnitType') return;
   if (a.tag === 'VUnit' && b.tag === 'VUnit') return;
+  if (a.tag === 'VWorld' && b.tag === 'VWorld') return;
+  if (a.tag === 'VWorldToken' && b.tag === 'VWorldToken') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.usage === b.usage) {
     conv(k, a.type, b.type);
     const v = VVar(k);
@@ -62,6 +68,12 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     conv(k, a.right, b.right);
     return conv(k, a.val, b.val);
   }
+  if (a.tag === 'VCon' && b.tag === 'VCon') {
+    conv(k, a.sig, b.sig);
+    return conv(k, a.val, b.val);
+  }
+  if (a.tag === 'VFix' && b.tag === 'VFix')
+    return conv(k, a.sig, b.sig);
 
   if (a.tag === 'VAbs') {
     const v = VVar(k);
