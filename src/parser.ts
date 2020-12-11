@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid, IndUnit } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid, IndUnit, IndSum } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -317,6 +317,17 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
     const [scrut] = expr(ts[2], fromRepl);
     const [cas] = expr(ts[3], fromRepl);
     return IndUnit(motive, scrut, cas);
+  }
+  if (isName(ts[0], 'indSum')) {
+    let j = 1;
+    let u = usage(ts[1]);
+    if (u) { j = 2 } else { u = UsageRig.default }
+    if (ts.length !== 4 + j) return serr(`indSum expects exactly 4 arguments`);
+    const [motive] = expr(ts[j], fromRepl);
+    const [scrut] = expr(ts[j + 1], fromRepl);
+    const [caseLeft] = expr(ts[j + 2], fromRepl);
+    const [caseRight] = expr(ts[j + 3], fromRepl);
+    return IndSum(u, motive, scrut, caseLeft, caseRight);
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {

@@ -1,13 +1,13 @@
 import { log } from './config';
-import { Abs, App, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
+import { Abs, App, IndSum, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
 import { Ix, Name } from './names';
-import { Cons, indexOf, List, Nil, uncons, updateAt } from './utils/list';
+import { Cons, filter, index, indexOf, List, Nil, range, toArray, uncons, updateAt, zipWith } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp, VUnit } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp, VUnit, VInj } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
-import { addUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
+import { addUses, lubUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
 
 export type EntryT = { type: Val, usage: Usage };
 export const EntryT = (type: Val, usage: Usage): EntryT => ({ type, usage });
@@ -187,6 +187,23 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     const vmotive = evaluate(motive, local.vs);
     const [cas, u2] = check(local, tm.cas, vapp(vmotive, VUnit));
     return [IndUnit(motive, scrut, cas), vapp(vmotive, evaluate(scrut, local.vs)), addUses(u1, u2)];
+  }
+  if (tm.tag === 'IndSum') {
+    if (!UsageRig.sub(UsageRig.one, tm.usage))
+      return terr(`usage must be 1 <= q in sum induction ${show(tm)}: ${tm.usage}`)
+    const [scrut, sumty, u1] = synth(local, tm.scrut);
+    if (sumty.tag !== 'VSum') return terr(`not a sumtype in ${show(tm)}: ${showVal(local, sumty)}`);
+    const [motive] = check(local, tm.motive, VPi(UsageRig.default, '_', sumty, _ => VType));
+    const vmotive = evaluate(motive, local.vs);
+    const [caseLeft, uleft] = check(local, tm.caseLeft, VPi(tm.usage, 'x', sumty.left, x => vapp(vmotive, VInj('Left', sumty.left, sumty.right, x))));
+    const [caseRight, uright] = check(local, tm.caseRight, VPi(tm.usage, 'x', sumty.right, x => vapp(vmotive, VInj('Right', sumty.left, sumty.right, x))));
+    const u2 = lubUses(uleft, uright);
+    if (!u2) {
+      const wrongVars = toArray(filter(zipWith((a, i) => [a, i] as [Usage | null, number], zipWith(UsageRig.lub, uleft, uright), range(local.level)), ([x]) => x === null),
+        ([, i]) => `left: ${index(uleft, i)}, right: ${index(uright, i)}, variable: ${index(local.ns, i)} (${i})`);
+      return terr(`usage mismatch in sum branches ${show(tm)}: ${wrongVars.join('; ')}`);
+    }
+    return [IndSum(tm.usage, motive, scrut, caseLeft, caseRight), vapp(vmotive, evaluate(scrut, local.vs)), addUses(multiplyUses(tm.usage, u1), u2)];
   }
   return terr(`unable to synth ${show(tm)}`);
 };

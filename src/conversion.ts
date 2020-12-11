@@ -17,6 +17,11 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
     conv(k, a.motive, b.motive);
     return conv(k, a.cas, b.cas);
   }
+  if (a.tag === 'EIndSum' && b.tag === 'EIndSum' && a.usage === b.usage) {
+    conv(k, a.motive, b.motive);
+    conv(k, a.caseLeft, b.caseLeft);
+    return conv(k, a.caseRight, b.caseRight);
+  }
   return terr(`conv failed (${k}): ${show(x, k)} ~ ${show(y, k)}`);
 };
 export const conv = (k: Ix, a: Val, b: Val): void => {

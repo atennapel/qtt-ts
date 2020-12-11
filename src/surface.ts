@@ -5,7 +5,7 @@ import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
 import { Usage, UsageRig } from './usage';
 
-export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | Sum | Inj;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | Sum | Inj | IndSum;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -37,6 +37,8 @@ export interface Sum { readonly tag: 'Sum'; readonly left: Term; readonly right:
 export const Sum = (left: Term, right: Term): Sum => ({ tag: 'Sum', left, right });
 export interface Inj { readonly tag: 'Inj'; readonly which: 'Left' | 'Right'; readonly val: Term }
 export const Inj = (which: 'Left' | 'Right', val: Term): Inj => ({ tag: 'Inj', which, val });
+export interface IndSum { readonly tag: 'IndSum'; readonly usage: Usage; readonly motive: Term; readonly scrut: Term; readonly caseLeft: Term; readonly caseRight: Term }
+export const IndSum = (usage: Usage, motive: Term, scrut: Term, caseLeft: Term, caseRight: Term): IndSum => ({ tag: 'IndSum', usage, motive, scrut, caseLeft, caseRight });
 
 export const flattenPi = (t: Term): [[Usage, Name, Term][], Term] => {
   const params: [Usage, Name, Term][] = [];
@@ -132,6 +134,8 @@ export const show = (t: Term): string => {
     return `indVoid ${showS(t.motive)} ${showS(t.scrut)}`;
   if (t.tag === 'IndUnit')
     return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+  if (t.tag === 'IndSum')
+    return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
   return t;
 };
 
@@ -163,6 +167,8 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Inj') return Inj(t.which, fromCore(t.val, ns));
   if (t.tag === 'IndVoid') return IndVoid(fromCore(t.motive, ns), fromCore(t.scrut, ns));
   if (t.tag === 'IndUnit') return IndUnit(fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
+  if (t.tag === 'IndSum')
+    return IndSum(t.usage, fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.caseLeft, ns), fromCore(t.caseRight, ns));
   return t;
 };
 

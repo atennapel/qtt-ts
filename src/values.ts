@@ -1,4 +1,4 @@
-import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair, Sum, Inj, IndVoid, IndUnit } from './core';
+import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair, Sum, Inj, IndVoid, IndUnit, IndSum } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
@@ -12,14 +12,16 @@ export type Head = HVar;
 export interface HVar { readonly tag: 'HVar'; readonly level: Lvl }
 export const HVar = (level: Lvl): HVar => ({ tag: 'HVar', level });
 
-export type Elim = EApp | EIndVoid | EIndUnit;
+export type Elim = EApp | EIndVoid | EIndUnit | EIndSum;
 
 export interface EApp { readonly tag: 'EApp'; readonly arg: Val }
 export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
 export interface EIndVoid { readonly tag: 'EIndVoid'; readonly motive: Val }
 export const EIndVoid = (motive: Val): EIndVoid => ({ tag: 'EIndVoid', motive });
-export interface EIndUnit { readonly tag: 'EIndUnit'; readonly motive: Val, cas: Val }
+export interface EIndUnit { readonly tag: 'EIndUnit'; readonly motive: Val; readonly cas: Val }
 export const EIndUnit = (motive: Val, cas: Val): EIndUnit => ({ tag: 'EIndUnit', motive, cas });
+export interface EIndSum { readonly tag: 'EIndSum'; readonly usage: Usage; readonly motive: Val; readonly caseLeft: Val; readonly caseRight: Val }
+export const EIndSum = (usage: Usage, motive: Val, caseLeft: Val, caseRight: Val): EIndSum => ({ tag: 'EIndSum', usage, motive, caseLeft, caseRight });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
@@ -70,6 +72,11 @@ export const vindunit = (motive: Val, scrut: Val, cas: Val) => {
   if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndUnit(motive, cas), scrut.spine));
   return impossible(`vindunit: ${scrut.tag}`);
 };
+export const vindsum = (usage: Usage, motive: Val, scrut: Val, caseLeft: Val, caseRight: Val) => {
+  if (scrut.tag === 'VInj') return vapp(scrut.which === 'Left' ? caseLeft : caseRight, scrut.val);
+  if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndSum(usage, motive, caseLeft, caseRight), scrut.spine));
+  return impossible(`vindsum: ${scrut.tag}`);
+};
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType;
@@ -98,6 +105,8 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return vindvoid(evaluate(t.motive, vs), evaluate(t.scrut, vs));
   if (t.tag === 'IndUnit')
     return vindunit(evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.cas, vs));
+  if (t.tag === 'IndSum')
+    return vindsum(t.usage, evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.caseLeft, vs), evaluate(t.caseRight, vs));
   return t;
 };
 
@@ -109,6 +118,7 @@ const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
   if (e.tag === 'EApp') return App(t, quote(e.arg, k));
   if (e.tag === 'EIndVoid') return IndVoid(quote(e.motive, k), t);
   if (e.tag === 'EIndUnit') return IndUnit(quote(e.motive, k), t, quote(e.cas, k));
+  if (e.tag === 'EIndSum') return IndSum(e.usage, quote(e.motive, k), t, quote(e.caseLeft, k), quote(e.caseRight, k));
   return e;
 };
 export const quote = (v: Val, k: Ix): Term => {

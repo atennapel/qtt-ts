@@ -1,12 +1,12 @@
 import { log } from './config';
 import { Pi, Term, show } from './core';
 import { Ix } from './names';
-import { Cons, List, Nil, updateAt, uncons } from './utils/list';
+import { Cons, List, Nil, updateAt, uncons, zipWith, range, filter, index, toArray } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar, VSum, VPi, VVoid, VUnit, vapp } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VUnitType, VVar, VSum, VPi, VVoid, VUnit, VInj, vapp } from './values';
 import * as V from './values';
 import { conv } from './conversion';
-import { addUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
+import { addUses, lubUses, multiplyUses, noUses, Usage, UsageRig, Uses } from './usage';
 
 export type EntryT = { type: Val, usage: Usage };
 export const EntryT = (type: Val, usage: Usage): EntryT => ({ type, usage });
@@ -132,6 +132,23 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     const motive = evaluate(tm.motive, local.vs);
     const u2 = check(local, tm.cas, vapp(motive, VUnit));
     return [vapp(motive, evaluate(tm.scrut, local.vs)), addUses(u1, u2)];
+  }
+  if (tm.tag === 'IndSum') {
+    if (!UsageRig.sub(UsageRig.one, tm.usage))
+      return terr(`usage must be 1 <= q in sum induction ${show(tm)}: ${tm.usage}`)
+    const [sumty, u1] = synth(local, tm.scrut);
+    if (sumty.tag !== 'VSum') return terr(`not a sumtype in ${show(tm)}: ${showVal(local, sumty)}`);
+    check(local, tm.motive, VPi(UsageRig.default, '_', sumty, _ => VType));
+    const motive = evaluate(tm.motive, local.vs);
+    const uleft = check(local, tm.caseLeft, VPi(tm.usage, 'x', sumty.left, x => vapp(motive, VInj('Left', sumty.left, sumty.right, x))));
+    const uright = check(local, tm.caseRight, VPi(tm.usage, 'x', sumty.right, x => vapp(motive, VInj('Right', sumty.left, sumty.right, x))));
+    const u2 = lubUses(uleft, uright);
+    if (!u2) {
+      const wrongVars = toArray(filter(zipWith((a, i) => [a, i] as [Usage | null, number], zipWith(UsageRig.lub, uleft, uright), range(local.level)), ([x]) => x === null),
+        ([, i]) => `left: ${index(uleft, i)}, right: ${index(uright, i)}, variable: ${i}`);
+      return terr(`usage mismatch in sum branches ${show(tm)}: ${wrongVars.join('; ')}`);
+    }
+    return [vapp(motive, evaluate(tm.scrut, local.vs)), addUses(multiplyUses(tm.usage, u1), u2)];
   }
   return terr(`unable to synth ${show(tm)}`);
 };
