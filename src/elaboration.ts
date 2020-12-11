@@ -1,9 +1,9 @@
 import { log } from './config';
-import { Abs, App, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
+import { Abs, App, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, Var, Void } from './core';
 import { Ix, Name } from './names';
 import { Cons, indexOf, List, Nil, uncons, updateAt } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp } from './values';
+import { Lvl, EnvV, evaluate, quote, Val, vinst, VType, VVar, VUnitType, VSigma, VSum, VVoid, VPi, vapp, VUnit } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { conv } from './conversion';
@@ -180,6 +180,13 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     const [motive] = check(local, tm.motive, VPi(UsageRig.default, '_', VVoid, _ => VType));
     const [scrut, u] = check(local, tm.scrut, VVoid);
     return [IndVoid(motive, scrut), vapp(evaluate(motive, local.vs), evaluate(scrut, local.vs)), u];
+  }
+  if (tm.tag === 'IndUnit') {
+    const [motive] = check(local, tm.motive, VPi(UsageRig.default, '_', VUnitType, _ => VType));
+    const [scrut, u1] = check(local, tm.scrut, VUnitType);
+    const vmotive = evaluate(motive, local.vs);
+    const [cas, u2] = check(local, tm.cas, vapp(vmotive, VUnit));
+    return [IndUnit(motive, scrut, cas), vapp(vmotive, evaluate(scrut, local.vs)), addUses(u1, u2)];
   }
   return terr(`unable to synth ${show(tm)}`);
 };

@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid, IndUnit } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -310,6 +310,13 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
     const [motive] = expr(ts[1], fromRepl);
     const [scrut] = expr(ts[2], fromRepl);
     return IndVoid(motive, scrut);
+  }
+  if (isName(ts[0], 'indUnit')) {
+    if (ts.length !== 4) return serr(`indUnit expects exactly 3 arguments`);
+    const [motive] = expr(ts[1], fromRepl);
+    const [scrut] = expr(ts[2], fromRepl);
+    const [cas] = expr(ts[3], fromRepl);
+    return IndUnit(motive, scrut, cas);
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {

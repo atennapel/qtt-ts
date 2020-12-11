@@ -5,7 +5,7 @@ import { impossible } from './utils/utils';
 import { Lvl, quote, Val } from './values';
 import { Usage, UsageRig } from './usage';
 
-export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | Sigma | Pair | Sum | Inj;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | Sum | Inj;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -27,6 +27,8 @@ export interface UnitType { readonly tag: 'UnitType' }
 export const UnitType: UnitType = { tag: 'UnitType' };
 export interface Unit { readonly tag: 'Unit' }
 export const Unit: Unit = { tag: 'Unit' };
+export interface IndUnit { readonly tag: 'IndUnit'; readonly motive: Term; readonly scrut: Term, readonly cas: Term }
+export const IndUnit = (motive: Term, scrut: Term, cas: Term): IndUnit => ({ tag: 'IndUnit', motive, scrut, cas });
 export interface Sigma { readonly tag: 'Sigma'; readonly usage: Usage; readonly name: Name; readonly type: Term; readonly body: Term }
 export const Sigma = (usage: Usage, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', usage, name, type, body });
 export interface Pair { readonly tag: 'Pair'; readonly fst: Term; readonly snd: Term }
@@ -92,7 +94,8 @@ export const flattenSum = (t: Term): Term[] => {
 };
 
 const showP = (b: boolean, t: Term) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair'; 
+const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair';
+const showS = (t: Term) => showP(!isSimple(t), t);
 export const show = (t: Term): string => {
   if (t.tag === 'Type') return 'Type';
   if (t.tag === 'Void') return 'Void';
@@ -124,9 +127,11 @@ export const show = (t: Term): string => {
   if (t.tag === 'Sum')
     return flattenSum(t).map(x => showP(!isSimple(x) && x.tag !== 'App', x)).join(' ++ ');
   if (t.tag === 'Inj')
-    return `${t.which} ${showP(!isSimple(t.val), t.val)}`;
+    return `${t.which} ${showS(t.val)}`;
   if (t.tag === 'IndVoid')
-    return `indVoid ${showP(!isSimple(t.motive), t.motive)} ${showP(!isSimple(t.scrut), t.scrut)}`;
+    return `indVoid ${showS(t.motive)} ${showS(t.scrut)}`;
+  if (t.tag === 'IndUnit')
+    return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   return t;
 };
 
@@ -157,6 +162,7 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Sum') return Sum(fromCore(t.left, ns), fromCore(t.right, ns));
   if (t.tag === 'Inj') return Inj(t.which, fromCore(t.val, ns));
   if (t.tag === 'IndVoid') return IndVoid(fromCore(t.motive, ns), fromCore(t.scrut, ns));
+  if (t.tag === 'IndUnit') return IndUnit(fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
   return t;
 };
 

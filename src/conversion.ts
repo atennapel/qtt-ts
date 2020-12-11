@@ -13,6 +13,10 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
   if (a.tag === 'EApp' && b.tag === 'EApp') return conv(k, a.arg, b.arg);
   if (a.tag === 'EIndVoid' && b.tag === 'EIndVoid') return conv(k, a.motive, b.motive);
+  if (a.tag === 'EIndUnit' && b.tag === 'EIndUnit') {
+    conv(k, a.motive, b.motive);
+    return conv(k, a.cas, b.cas);
+  }
   return terr(`conv failed (${k}): ${show(x, k)} ~ ${show(y, k)}`);
 };
 export const conv = (k: Ix, a: Val, b: Val): void => {

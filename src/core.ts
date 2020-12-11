@@ -17,15 +17,16 @@ t ::=
 
   ()                  -- unit type
   *                   -- unit value
+  indUnit P x p       -- unit induction
 
-  (u x : t) ** t        -- sigma/pair type
+  (u x : t) ** t      -- sigma/pair type
   (t, t : t)          -- pair
 
   t ++ t              -- sum type
   Left t t t          -- left injection
   Right t t t         -- right injection
 */
-export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | Sigma | Pair | Sum | Inj;
+export type Term = Type | Var | Pi | Abs | App | Let | Void | IndVoid | UnitType | Unit | IndUnit | Sigma | Pair | Sum | Inj;
 
 export interface Type { readonly tag: 'Type' }
 export const Type: Type = { tag: 'Type' };
@@ -47,6 +48,8 @@ export interface UnitType { readonly tag: 'UnitType' }
 export const UnitType: UnitType = { tag: 'UnitType' };
 export interface Unit { readonly tag: 'Unit' }
 export const Unit: Unit = { tag: 'Unit' };
+export interface IndUnit { readonly tag: 'IndUnit'; readonly motive: Term; readonly scrut: Term, readonly cas: Term }
+export const IndUnit = (motive: Term, scrut: Term, cas: Term): IndUnit => ({ tag: 'IndUnit', motive, scrut, cas });
 export interface Sigma { readonly tag: 'Sigma'; readonly usage: Usage; readonly name: Name; readonly type: Term; readonly body: Term }
 export const Sigma = (usage: Usage, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', usage, name, type, body });
 export interface Pair { readonly tag: 'Pair'; readonly fst: Term; readonly snd: Term; readonly type: Term }
@@ -112,7 +115,8 @@ export const flattenSum = (t: Term): Term[] => {
 };
 
 const showP = (b: boolean, t: Term) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair'; 
+const isSimple = (t: Term) => t.tag === 'Type' || t.tag === 'Var' || t.tag === 'Void' || t.tag === 'UnitType' || t.tag === 'Unit' || t.tag === 'Pair';
+const showS = (t: Term) => showP(!isSimple(t), t);
 export const show = (t: Term): string => {
   if (t.tag === 'Type') return 'Type';
   if (t.tag === 'Void') return 'Void';
@@ -144,8 +148,10 @@ export const show = (t: Term): string => {
   if (t.tag === 'Sum')
     return flattenSum(t).map(x => showP(!isSimple(x) && x.tag !== 'App', x)).join(' ++ ');
   if (t.tag === 'Inj')
-    return `${t.which} ${showP(!isSimple(t.left), t.left)} ${showP(!isSimple(t.right), t.right)} ${showP(!isSimple(t.val), t.val)}`;
+    return `${t.which} ${showS(t.left)} ${showS(t.right)} ${showS(t.val)}`;
   if (t.tag === 'IndVoid')
-    return `indVoid ${showP(!isSimple(t.motive), t.motive)} ${showP(!isSimple(t.scrut), t.scrut)}`;
+    return `indVoid ${showS(t.motive)} ${showS(t.scrut)}`;
+  if (t.tag === 'IndUnit')
+    return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   return t;
 };
