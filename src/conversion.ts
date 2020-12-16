@@ -18,7 +18,7 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
     conv(k, a.motive, b.motive);
     return conv(k, a.cas, b.cas);
   }
-  if (a.tag === 'EIndSigma' && b.tag === 'EIndSigma') {
+  if (a.tag === 'EIndSigma' && b.tag === 'EIndSigma' && a.usage === b.usage) {
     conv(k, a.motive, b.motive);
     return conv(k, a.cas, b.cas);
   }
@@ -31,6 +31,7 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
     conv(k, a.motive, b.motive);
     return conv(k, a.cas, b.cas);
   }
+  if (a.tag === 'EHelloWorld' && b.tag === 'EHelloWorld') return;
   return terr(`conv failed (${k}): ${show(x, k)} ~ ${show(y, k)}`);
 };
 export const conv = (k: Ix, a: Val, b: Val): void => {
@@ -112,9 +113,9 @@ const etaSigma = (a: VPair, b: Val): [Val, Val] => {
   (x, y : s) ~ t
   */
   const sigma = a.type as VSigma;
-  const fst = vindsigma(VAbs(UsageRig.default, '_', sigma, _ => sigma.type), b,
+  const fst = vindsigma(UsageRig.default, VAbs(UsageRig.default, '_', sigma, _ => sigma.type), b,
     VAbs(sigma.usage, 'x', sigma.type, x => VAbs(UsageRig.one, 'y', vinst(sigma, x), _ => x)))
-  const snd = vindsigma(VAbs(UsageRig.default, '_', sigma, _ => vinst(sigma, fst)), b,
+  const snd = vindsigma(UsageRig.default, VAbs(UsageRig.default, '_', sigma, _ => vinst(sigma, fst)), b,
     VAbs(sigma.usage, 'x', sigma.type, x => VAbs(UsageRig.one, 'y', vinst(sigma, x), y => y)))
   return [fst, snd];
 };

@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Con, Fix, IndFix, IndSigma, IndSum, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, UpdateWorld, Var, Void, World } from './core';
+import { Abs, App, Con, Fix, HelloWorld, IndFix, IndSigma, IndSum, IndUnit, IndVoid, Inj, Let, Pair, Pi, Sigma, Sum, Term, Type, Unit, UnitType, UpdateWorld, Var, Void, World } from './core';
 import { Ix, Name } from './names';
 import { Cons, filter, index, indexOf, List, Nil, range, toArray, uncons, updateAt, zipWith } from './utils/list';
 import { terr, tryT } from './utils/utils';
@@ -204,12 +204,14 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     return [IndUnit(motive, scrut, cas), vapp(vmotive, evaluate(scrut, local.vs)), addUses(u1, u2)];
   }
   if (tm.tag === 'IndSigma') {
+    if (!UsageRig.sub(UsageRig.one, tm.usage))
+      return terr(`usage must be 1 <= q in sigma induction ${show(tm)}: ${tm.usage}`)
     const [scrut, sigma, u1] = synth(local, tm.scrut);
     if (sigma.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, sigma)}`);
     const [motive] = check(local, tm.motive, VPi(UsageRig.default, '_', sigma, _ => VType));
     const vmotive = evaluate(motive, local.vs);
-    const [cas, u2] = check(local, tm.cas, VPi(sigma.usage, 'x', sigma.type, x => VPi(UsageRig.one, 'y', vinst(sigma, x), y => vapp(vmotive, VPair(x, y, sigma)))));
-    return [IndSigma(motive, scrut, cas), vapp(vmotive, evaluate(scrut, local.vs)), addUses(u1, u2)];
+    const [cas, u2] = check(local, tm.cas, VPi(UsageRig.multiply(tm.usage, sigma.usage), 'x', sigma.type, x => VPi(tm.usage, 'y', vinst(sigma, x), y => vapp(vmotive, VPair(x, y, sigma)))));
+    return [IndSigma(tm.usage, motive, scrut, cas), vapp(vmotive, evaluate(scrut, local.vs)), multiplyUses(tm.usage, addUses(u1, u2))];
   }
   if (tm.tag === 'IndSum') {
     if (!UsageRig.sub(UsageRig.one, tm.usage))
@@ -249,6 +251,10 @@ const synth = (local: Local, tm: S.Term): [Term, Val, Uses] => {
     const ty = evaluate(type, local.vs);
     const [cont, u] = check(local, tm.cont, VPi(UsageRig.one, '_', VWorld, _ => VSigma(tm.usage, '_', ty, _ => VWorld)));
     return [UpdateWorld(tm.usage, type, cont), ty, multiplyUses(tm.usage, u)];
+  }
+  if (tm.tag === 'HelloWorld') {
+    const [arg, u] = check(local, tm.arg, VWorld);
+    return [HelloWorld(arg), VWorld, u];
   }
   return terr(`unable to synth ${show(tm)}`);
 };

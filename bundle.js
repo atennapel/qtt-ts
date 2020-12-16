@@ -45,7 +45,7 @@ const convElim = (k, a, b, x, y) => {
         exports.conv(k, a.motive, b.motive);
         return exports.conv(k, a.cas, b.cas);
     }
-    if (a.tag === 'EIndSigma' && b.tag === 'EIndSigma') {
+    if (a.tag === 'EIndSigma' && b.tag === 'EIndSigma' && a.usage === b.usage) {
         exports.conv(k, a.motive, b.motive);
         return exports.conv(k, a.cas, b.cas);
     }
@@ -58,6 +58,8 @@ const convElim = (k, a, b, x, y) => {
         exports.conv(k, a.motive, b.motive);
         return exports.conv(k, a.cas, b.cas);
     }
+    if (a.tag === 'EHelloWorld' && b.tag === 'EHelloWorld')
+        return;
     return utils_1.terr(`conv failed (${k}): ${values_1.show(x, k)} ~ ${values_1.show(y, k)}`);
 };
 const conv = (k, a, b) => {
@@ -141,15 +143,15 @@ const etaSigma = (a, b) => {
     (x, y : s) ~ t
     */
     const sigma = a.type;
-    const fst = values_1.vindsigma(values_1.VAbs(usage_1.UsageRig.default, '_', sigma, _ => sigma.type), b, values_1.VAbs(sigma.usage, 'x', sigma.type, x => values_1.VAbs(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), _ => x)));
-    const snd = values_1.vindsigma(values_1.VAbs(usage_1.UsageRig.default, '_', sigma, _ => values_1.vinst(sigma, fst)), b, values_1.VAbs(sigma.usage, 'x', sigma.type, x => values_1.VAbs(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), y => y)));
+    const fst = values_1.vindsigma(usage_1.UsageRig.default, values_1.VAbs(usage_1.UsageRig.default, '_', sigma, _ => sigma.type), b, values_1.VAbs(sigma.usage, 'x', sigma.type, x => values_1.VAbs(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), _ => x)));
+    const snd = values_1.vindsigma(usage_1.UsageRig.default, values_1.VAbs(usage_1.UsageRig.default, '_', sigma, _ => values_1.vinst(sigma, fst)), b, values_1.VAbs(sigma.usage, 'x', sigma.type, x => values_1.VAbs(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), y => y)));
     return [fst, snd];
 };
 
 },{"./config":1,"./usage":10,"./utils/list":11,"./utils/utils":12,"./values":13}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.UpdateWorld = exports.WorldToken = exports.World = exports.IndFix = exports.Con = exports.Fix = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.HelloWorld = exports.UpdateWorld = exports.WorldToken = exports.World = exports.IndFix = exports.Con = exports.Fix = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const usage_1 = require("./usage");
 exports.Type = { tag: 'Type' };
 const Var = (index) => ({ tag: 'Var', index });
@@ -173,7 +175,7 @@ const Sigma = (usage, name, type, body) => ({ tag: 'Sigma', usage, name, type, b
 exports.Sigma = Sigma;
 const Pair = (fst, snd, type) => ({ tag: 'Pair', fst, snd, type });
 exports.Pair = Pair;
-const IndSigma = (motive, scrut, cas) => ({ tag: 'IndSigma', motive, scrut, cas });
+const IndSigma = (usage, motive, scrut, cas) => ({ tag: 'IndSigma', usage, motive, scrut, cas });
 exports.IndSigma = IndSigma;
 const Sum = (left, right) => ({ tag: 'Sum', left, right });
 exports.Sum = Sum;
@@ -191,6 +193,8 @@ exports.World = { tag: 'World' };
 exports.WorldToken = { tag: 'WorldToken' };
 const UpdateWorld = (usage, type, cont) => ({ tag: 'UpdateWorld', usage, type, cont });
 exports.UpdateWorld = UpdateWorld;
+const HelloWorld = (arg) => ({ tag: 'HelloWorld', arg });
+exports.HelloWorld = HelloWorld;
 const flattenPi = (t) => {
     const params = [];
     let c = t;
@@ -296,21 +300,23 @@ const show = (t) => {
     if (t.tag === 'IndUnit')
         return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     if (t.tag === 'IndSum')
-        return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
+        return `indSum ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
     if (t.tag === 'IndSigma')
-        return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+        return `indSigma ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     if (t.tag === 'Fix')
         return `Fix ${showS(t.sig)}`;
     if (t.tag === 'Con')
         return `Con ${showS(t.sig)} ${showS(t.val)}`;
     if (t.tag === 'IndFix')
-        return `indFix ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+        return `indFix ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     if (t.tag === 'World')
         return 'World';
     if (t.tag === 'WorldToken')
         return 'WorldToken';
     if (t.tag === 'UpdateWorld')
-        return `updateWorld ${t.usage} ${showS(t.type)} ${showS(t.cont)}`;
+        return `updateWorld ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${showS(t.type)} ${showS(t.cont)}`;
+    if (t.tag === 'HelloWorld')
+        return `helloWorld ${showS(t.arg)}`;
     return t;
 };
 exports.show = show;
@@ -526,13 +532,15 @@ const synth = (local, tm) => {
         return [core_1.IndUnit(motive, scrut, cas), values_1.vapp(vmotive, values_1.evaluate(scrut, local.vs)), usage_1.addUses(u1, u2)];
     }
     if (tm.tag === 'IndSigma') {
+        if (!usage_1.UsageRig.sub(usage_1.UsageRig.one, tm.usage))
+            return utils_1.terr(`usage must be 1 <= q in sigma induction ${surface_1.show(tm)}: ${tm.usage}`);
         const [scrut, sigma, u1] = synth(local, tm.scrut);
         if (sigma.tag !== 'VSigma')
             return utils_1.terr(`not a sigma type in ${surface_1.show(tm)}: ${showVal(local, sigma)}`);
         const [motive] = check(local, tm.motive, values_1.VPi(usage_1.UsageRig.default, '_', sigma, _ => values_1.VType));
         const vmotive = values_1.evaluate(motive, local.vs);
-        const [cas, u2] = check(local, tm.cas, values_1.VPi(sigma.usage, 'x', sigma.type, x => values_1.VPi(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), y => values_1.vapp(vmotive, values_1.VPair(x, y, sigma)))));
-        return [core_1.IndSigma(motive, scrut, cas), values_1.vapp(vmotive, values_1.evaluate(scrut, local.vs)), usage_1.addUses(u1, u2)];
+        const [cas, u2] = check(local, tm.cas, values_1.VPi(usage_1.UsageRig.multiply(tm.usage, sigma.usage), 'x', sigma.type, x => values_1.VPi(tm.usage, 'y', values_1.vinst(sigma, x), y => values_1.vapp(vmotive, values_1.VPair(x, y, sigma)))));
+        return [core_1.IndSigma(tm.usage, motive, scrut, cas), values_1.vapp(vmotive, values_1.evaluate(scrut, local.vs)), usage_1.multiplyUses(tm.usage, usage_1.addUses(u1, u2))];
     }
     if (tm.tag === 'IndSum') {
         if (!usage_1.UsageRig.sub(usage_1.UsageRig.one, tm.usage))
@@ -574,6 +582,10 @@ const synth = (local, tm) => {
         const ty = values_1.evaluate(type, local.vs);
         const [cont, u] = check(local, tm.cont, values_1.VPi(usage_1.UsageRig.one, '_', values_1.VWorld, _ => values_1.VSigma(tm.usage, '_', ty, _ => values_1.VWorld)));
         return [core_1.UpdateWorld(tm.usage, type, cont), ty, usage_1.multiplyUses(tm.usage, u)];
+    }
+    if (tm.tag === 'HelloWorld') {
+        const [arg, u] = check(local, tm.arg, values_1.VWorld);
+        return [core_1.HelloWorld(arg), values_1.VWorld, u];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
@@ -998,12 +1010,20 @@ const exprs = (ts, br, fromRepl) => {
         return surface_1.IndUnit(motive, scrut, cas);
     }
     if (isName(ts[0], 'indSigma')) {
-        if (ts.length !== 4)
+        let j = 1;
+        let u = usage(ts[1]);
+        if (u) {
+            j = 2;
+        }
+        else {
+            u = usage_1.UsageRig.default;
+        }
+        if (ts.length !== 3 + j)
             return utils_1.serr(`indSigma expects exactly 3 arguments`);
-        const [motive] = expr(ts[1], fromRepl);
-        const [scrut] = expr(ts[2], fromRepl);
-        const [cas] = expr(ts[3], fromRepl);
-        return surface_1.IndSigma(motive, scrut, cas);
+        const [motive] = expr(ts[j], fromRepl);
+        const [scrut] = expr(ts[j + 1], fromRepl);
+        const [cas] = expr(ts[j + 2], fromRepl);
+        return surface_1.IndSigma(u, motive, scrut, cas);
     }
     if (isName(ts[0], 'indSum')) {
         let j = 1;
@@ -1055,11 +1075,17 @@ const exprs = (ts, br, fromRepl) => {
         else {
             u = usage_1.UsageRig.default;
         }
-        if (ts.length !== 3 + j)
+        if (ts.length !== 2 + j)
             return utils_1.serr(`updateWorld expects exactly 2 arguments`);
         const [type] = expr(ts[j], fromRepl);
         const [cont] = expr(ts[j + 1], fromRepl);
         return surface_1.UpdateWorld(u, type, cont);
+    }
+    if (isName(ts[0], 'helloWorld')) {
+        if (ts.length !== 2)
+            return utils_1.serr(`helloWorld expects one argument`);
+        const [arg] = expr(ts[1], fromRepl);
+        return surface_1.HelloWorld(arg);
     }
     const j = ts.findIndex(x => isName(x, '->'));
     if (j >= 0) {
@@ -1476,7 +1502,7 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":3,"./elaboration":4,"./parser":6,"./surface":9,"./usage":10,"./values":13,"./verification":14}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Hole = exports.UpdateWorld = exports.World = exports.IndFix = exports.Con = exports.Fix = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
+exports.showVal = exports.showCore = exports.fromCore = exports.show = exports.flattenSum = exports.flattenPair = exports.flattenSigma = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Hole = exports.HelloWorld = exports.UpdateWorld = exports.World = exports.IndFix = exports.Con = exports.Fix = exports.IndSum = exports.Inj = exports.Sum = exports.IndSigma = exports.Pair = exports.Sigma = exports.IndUnit = exports.Unit = exports.UnitType = exports.IndVoid = exports.Void = exports.Let = exports.App = exports.Abs = exports.Pi = exports.Var = exports.Type = void 0;
 const names_1 = require("./names");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
@@ -1504,7 +1530,7 @@ const Sigma = (usage, name, type, body) => ({ tag: 'Sigma', usage, name, type, b
 exports.Sigma = Sigma;
 const Pair = (fst, snd) => ({ tag: 'Pair', fst, snd });
 exports.Pair = Pair;
-const IndSigma = (motive, scrut, cas) => ({ tag: 'IndSigma', motive, scrut, cas });
+const IndSigma = (usage, motive, scrut, cas) => ({ tag: 'IndSigma', usage, motive, scrut, cas });
 exports.IndSigma = IndSigma;
 const Sum = (left, right) => ({ tag: 'Sum', left, right });
 exports.Sum = Sum;
@@ -1521,6 +1547,8 @@ exports.IndFix = IndFix;
 exports.World = { tag: 'World' };
 const UpdateWorld = (usage, type, cont) => ({ tag: 'UpdateWorld', usage, type, cont });
 exports.UpdateWorld = UpdateWorld;
+const HelloWorld = (arg) => ({ tag: 'HelloWorld', arg });
+exports.HelloWorld = HelloWorld;
 const Hole = (name) => ({ tag: 'Hole', name });
 exports.Hole = Hole;
 const flattenPi = (t) => {
@@ -1628,19 +1656,21 @@ const show = (t) => {
     if (t.tag === 'IndUnit')
         return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     if (t.tag === 'IndSum')
-        return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
+        return `indSum ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
     if (t.tag === 'IndSigma')
-        return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+        return `indSigma ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     if (t.tag === 'Fix')
         return `Fix ${showS(t.sig)}`;
     if (t.tag === 'Con')
         return `Con ${showS(t.val)}`;
     if (t.tag === 'IndFix')
-        return `indFix ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+        return `indFix ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
     if (t.tag === 'World')
         return 'World';
     if (t.tag === 'UpdateWorld')
-        return `updateWorld ${t.usage} ${showS(t.type)} ${showS(t.cont)}`;
+        return `updateWorld ${t.usage === usage_1.UsageRig.default ? '' : `${t.usage} `}${showS(t.type)} ${showS(t.cont)}`;
+    if (t.tag === 'HelloWorld')
+        return `helloWorld ${showS(t.arg)}`;
     if (t.tag === 'Hole')
         return `_${t.name}`;
     return t;
@@ -1686,7 +1716,7 @@ const fromCore = (t, ns = list_1.Nil) => {
     if (t.tag === 'IndUnit')
         return exports.IndUnit(exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.cas, ns));
     if (t.tag === 'IndSigma')
-        return exports.IndSigma(exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.cas, ns));
+        return exports.IndSigma(t.usage, exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.cas, ns));
     if (t.tag === 'IndSum')
         return exports.IndSum(t.usage, exports.fromCore(t.motive, ns), exports.fromCore(t.scrut, ns), exports.fromCore(t.caseLeft, ns), exports.fromCore(t.caseRight, ns));
     if (t.tag === 'Fix')
@@ -1701,6 +1731,8 @@ const fromCore = (t, ns = list_1.Nil) => {
         return exports.Var('WorldToken');
     if (t.tag === 'UpdateWorld')
         return exports.UpdateWorld(t.usage, exports.fromCore(t.type, ns), exports.fromCore(t.cont, ns));
+    if (t.tag === 'HelloWorld')
+        return exports.HelloWorld(exports.fromCore(t.arg, ns));
     return t;
 };
 exports.fromCore = fromCore;
@@ -2011,7 +2043,7 @@ exports.eqArr = eqArr;
 },{"fs":16}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vindfix = exports.vindsum = exports.vindsigma = exports.vindunit = exports.vindvoid = exports.vapp = exports.vinst = exports.VVar = exports.VWorldToken = exports.VWorld = exports.VCon = exports.VFix = exports.VInj = exports.VSum = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EIndFix = exports.EIndSum = exports.EIndSigma = exports.EIndUnit = exports.EIndVoid = exports.EApp = exports.HVar = void 0;
+exports.show = exports.normalize = exports.quote = exports.evaluate = exports.vhelloworld = exports.vindfix = exports.vindsum = exports.vindsigma = exports.vindunit = exports.vindvoid = exports.vapp = exports.vinst = exports.VVar = exports.VWorldToken = exports.VWorld = exports.VCon = exports.VFix = exports.VInj = exports.VSum = exports.VPair = exports.VSigma = exports.VUnit = exports.VUnitType = exports.VVoid = exports.VPi = exports.VAbs = exports.VNe = exports.VType = exports.EHelloWorld = exports.EIndFix = exports.EIndSum = exports.EIndSigma = exports.EIndUnit = exports.EIndVoid = exports.EApp = exports.HVar = void 0;
 const core_1 = require("./core");
 const C = require("./core");
 const list_1 = require("./utils/list");
@@ -2025,12 +2057,13 @@ const EIndVoid = (motive) => ({ tag: 'EIndVoid', motive });
 exports.EIndVoid = EIndVoid;
 const EIndUnit = (motive, cas) => ({ tag: 'EIndUnit', motive, cas });
 exports.EIndUnit = EIndUnit;
-const EIndSigma = (motive, cas) => ({ tag: 'EIndSigma', motive, cas });
+const EIndSigma = (usage, motive, cas) => ({ tag: 'EIndSigma', usage, motive, cas });
 exports.EIndSigma = EIndSigma;
 const EIndSum = (usage, motive, caseLeft, caseRight) => ({ tag: 'EIndSum', usage, motive, caseLeft, caseRight });
 exports.EIndSum = EIndSum;
 const EIndFix = (usage, motive, cas) => ({ tag: 'EIndFix', usage, motive, cas });
 exports.EIndFix = EIndFix;
+exports.EHelloWorld = { tag: 'EHelloWorld' };
 exports.VType = { tag: 'VType' };
 const VNe = (head, spine) => ({ tag: 'VNe', head, spine });
 exports.VNe = VNe;
@@ -2081,11 +2114,11 @@ const vindunit = (motive, scrut, cas) => {
     return utils_1.impossible(`vindunit: ${scrut.tag}`);
 };
 exports.vindunit = vindunit;
-const vindsigma = (motive, scrut, cas) => {
+const vindsigma = (usage, motive, scrut, cas) => {
     if (scrut.tag === 'VPair')
         return exports.vapp(exports.vapp(cas, scrut.fst), scrut.snd);
     if (scrut.tag === 'VNe')
-        return exports.VNe(scrut.head, list_1.Cons(exports.EIndSigma(motive, cas), scrut.spine));
+        return exports.VNe(scrut.head, list_1.Cons(exports.EIndSigma(usage, motive, cas), scrut.spine));
     return utils_1.impossible(`vindsigma: ${scrut.tag}`);
 };
 exports.vindsigma = vindsigma;
@@ -2107,6 +2140,21 @@ const vindfix = (usage, motive, scrut, cas) => {
     return utils_1.impossible(`vindfix: ${scrut.tag}`);
 };
 exports.vindfix = vindfix;
+const vhelloworld = (scrut) => {
+    if (scrut.tag === 'VWorldToken') {
+        if (typeof window === 'undefined') {
+            console.log('Hello, world!');
+        }
+        else {
+            alert('Hello, world!');
+        }
+        return scrut;
+    }
+    if (scrut.tag === 'VNe')
+        return exports.VNe(scrut.head, list_1.Cons(exports.EHelloWorld, scrut.spine));
+    return utils_1.impossible(`vhelloworld: ${scrut.tag}`);
+};
+exports.vhelloworld = vhelloworld;
 const evaluate = (t, vs) => {
     if (t.tag === 'Type')
         return exports.VType;
@@ -2139,7 +2187,7 @@ const evaluate = (t, vs) => {
     if (t.tag === 'IndUnit')
         return exports.vindunit(exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.cas, vs));
     if (t.tag === 'IndSigma')
-        return exports.vindsigma(exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.cas, vs));
+        return exports.vindsigma(t.usage, exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.cas, vs));
     if (t.tag === 'IndSum')
         return exports.vindsum(t.usage, exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), exports.evaluate(t.caseLeft, vs), exports.evaluate(t.caseRight, vs));
     if (t.tag === 'World')
@@ -2155,8 +2203,10 @@ const evaluate = (t, vs) => {
     if (t.tag === 'UpdateWorld') {
         // updateWorld q A c ~> indSigma (\_. A) (c WorldToken) (\x y. x)
         const ty = exports.evaluate(t.type, vs);
-        return exports.vindsigma(exports.VAbs(usage_1.UsageRig.default, '_', exports.VSigma(t.usage, '_', ty, _ => exports.VWorld), _ => ty), exports.vapp(exports.evaluate(t.cont, vs), exports.VWorldToken), exports.VAbs(t.usage, 'x', ty, x => exports.VAbs(usage_1.UsageRig.one, 'w', exports.VWorld, _ => x)));
+        return exports.vindsigma(usage_1.UsageRig.default, exports.VAbs(usage_1.UsageRig.default, '_', exports.VSigma(t.usage, '_', ty, _ => exports.VWorld), _ => ty), exports.vapp(exports.evaluate(t.cont, vs), exports.VWorldToken), exports.VAbs(t.usage, 'x', ty, x => exports.VAbs(usage_1.UsageRig.one, 'w', exports.VWorld, _ => x)));
     }
+    if (t.tag === 'HelloWorld')
+        return exports.vhelloworld(exports.evaluate(t.arg, vs));
     return t;
 };
 exports.evaluate = evaluate;
@@ -2173,11 +2223,13 @@ const quoteElim = (t, e, k) => {
     if (e.tag === 'EIndUnit')
         return core_1.IndUnit(exports.quote(e.motive, k), t, exports.quote(e.cas, k));
     if (e.tag === 'EIndSigma')
-        return core_1.IndSigma(exports.quote(e.motive, k), t, exports.quote(e.cas, k));
+        return core_1.IndSigma(e.usage, exports.quote(e.motive, k), t, exports.quote(e.cas, k));
     if (e.tag === 'EIndSum')
         return core_1.IndSum(e.usage, exports.quote(e.motive, k), t, exports.quote(e.caseLeft, k), exports.quote(e.caseRight, k));
     if (e.tag === 'EIndFix')
         return core_1.IndFix(e.usage, exports.quote(e.motive, k), t, exports.quote(e.cas, k));
+    if (e.tag === 'EHelloWorld')
+        return core_1.HelloWorld(t);
     return e;
 };
 const quote = (v, k) => {
@@ -2352,13 +2404,23 @@ const synth = (local, tm) => {
         return [values_1.vapp(motive, values_1.evaluate(tm.scrut, local.vs)), usage_1.addUses(u1, u2)];
     }
     if (tm.tag === 'IndSigma') {
+        /*
+          1 <= q
+          G |- p : (u x : A) ** B
+          G |- P : ((u x : A) ** B x) -> Type
+          G |- k : (q * u x : A) -> (q y : B x) -> P (x, y)
+          ---------------------------------------------
+          q * G |- indSigma q P p k : P p
+        */
+        if (!usage_1.UsageRig.sub(usage_1.UsageRig.one, tm.usage))
+            return utils_1.terr(`usage must be 1 <= q in sigma induction ${core_1.show(tm)}: ${tm.usage}`);
         const [sigma, u1] = synth(local, tm.scrut);
         if (sigma.tag !== 'VSigma')
             return utils_1.terr(`not a sigma type in ${core_1.show(tm)}: ${showVal(local, sigma)}`);
         check(local, tm.motive, values_1.VPi(usage_1.UsageRig.default, '_', sigma, _ => values_1.VType));
         const motive = values_1.evaluate(tm.motive, local.vs);
-        const u2 = check(local, tm.cas, values_1.VPi(sigma.usage, 'x', sigma.type, x => values_1.VPi(usage_1.UsageRig.one, 'y', values_1.vinst(sigma, x), y => values_1.vapp(motive, values_1.VPair(x, y, sigma)))));
-        return [values_1.vapp(motive, values_1.evaluate(tm.scrut, local.vs)), usage_1.addUses(u1, u2)];
+        const u2 = check(local, tm.cas, values_1.VPi(usage_1.UsageRig.multiply(tm.usage, sigma.usage), 'x', sigma.type, x => values_1.VPi(tm.usage, 'y', values_1.vinst(sigma, x), y => values_1.vapp(motive, values_1.VPair(x, y, sigma)))));
+        return [values_1.vapp(motive, values_1.evaluate(tm.scrut, local.vs)), usage_1.multiplyUses(tm.usage, usage_1.addUses(u1, u2))];
     }
     if (tm.tag === 'IndSum') {
         if (!usage_1.UsageRig.sub(usage_1.UsageRig.one, tm.usage))
@@ -2408,6 +2470,10 @@ const synth = (local, tm) => {
         const ty = values_1.evaluate(tm.type, local.vs);
         const u = check(local, tm.cont, values_1.VPi(usage_1.UsageRig.one, '_', values_1.VWorld, _ => values_1.VSigma(tm.usage, '_', ty, _ => values_1.VWorld)));
         return [ty, usage_1.multiplyUses(tm.usage, u)];
+    }
+    if (tm.tag === 'HelloWorld') {
+        const u = check(local, tm.arg, values_1.VWorld);
+        return [values_1.VWorld, u];
     }
     return tm;
 };

@@ -1,4 +1,4 @@
-import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair, Sum, Inj, IndVoid, IndUnit, IndSigma, IndSum, IndFix, Con, Fix, World, WorldToken } from './core';
+import { Abs, App, Pi, Term, Type, Var, Void, UnitType, Unit, Sigma, Pair, Sum, Inj, IndVoid, IndUnit, IndSigma, IndSum, IndFix, Con, Fix, World, WorldToken, HelloWorld } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
@@ -12,7 +12,7 @@ export type Head = HVar;
 export interface HVar { readonly tag: 'HVar'; readonly level: Lvl }
 export const HVar = (level: Lvl): HVar => ({ tag: 'HVar', level });
 
-export type Elim = EApp | EIndVoid | EIndUnit | EIndSigma | EIndSum | EIndFix;
+export type Elim = EApp | EIndVoid | EIndUnit | EIndSigma | EIndSum | EIndFix | EHelloWorld;
 
 export interface EApp { readonly tag: 'EApp'; readonly arg: Val }
 export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
@@ -20,12 +20,14 @@ export interface EIndVoid { readonly tag: 'EIndVoid'; readonly motive: Val }
 export const EIndVoid = (motive: Val): EIndVoid => ({ tag: 'EIndVoid', motive });
 export interface EIndUnit { readonly tag: 'EIndUnit'; readonly motive: Val; readonly cas: Val }
 export const EIndUnit = (motive: Val, cas: Val): EIndUnit => ({ tag: 'EIndUnit', motive, cas });
-export interface EIndSigma { readonly tag: 'EIndSigma'; readonly motive: Val; readonly cas: Val }
-export const EIndSigma = (motive: Val, cas: Val): EIndSigma => ({ tag: 'EIndSigma', motive, cas });
+export interface EIndSigma { readonly tag: 'EIndSigma'; readonly usage: Usage; readonly motive: Val; readonly cas: Val }
+export const EIndSigma = (usage: Usage, motive: Val, cas: Val): EIndSigma => ({ tag: 'EIndSigma', usage, motive, cas });
 export interface EIndSum { readonly tag: 'EIndSum'; readonly usage: Usage; readonly motive: Val; readonly caseLeft: Val; readonly caseRight: Val }
 export const EIndSum = (usage: Usage, motive: Val, caseLeft: Val, caseRight: Val): EIndSum => ({ tag: 'EIndSum', usage, motive, caseLeft, caseRight });
 export interface EIndFix { readonly tag: 'EIndFix'; readonly usage: Usage; readonly motive: Val; readonly cas: Val }
 export const EIndFix = (usage: Usage, motive: Val, cas: Val): EIndFix => ({ tag: 'EIndFix', usage, motive, cas });
+export interface EHelloWorld { readonly tag: 'EHelloWorld' }
+export const EHelloWorld: EHelloWorld = { tag: 'EHelloWorld' };
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
@@ -84,9 +86,9 @@ export const vindunit = (motive: Val, scrut: Val, cas: Val): Val => {
   if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndUnit(motive, cas), scrut.spine));
   return impossible(`vindunit: ${scrut.tag}`);
 };
-export const vindsigma = (motive: Val, scrut: Val, cas: Val): Val => {
+export const vindsigma = (usage: Usage, motive: Val, scrut: Val, cas: Val): Val => {
   if (scrut.tag === 'VPair') return vapp(vapp(cas, scrut.fst), scrut.snd);
-  if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndSigma(motive, cas), scrut.spine));
+  if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndSigma(usage, motive, cas), scrut.spine));
   return impossible(`vindsigma: ${scrut.tag}`);
 };
 export const vindsum = (usage: Usage, motive: Val, scrut: Val, caseLeft: Val, caseRight: Val): Val => {
@@ -101,6 +103,18 @@ export const vindfix = (usage: Usage, motive: Val, scrut: Val, cas: Val): Val =>
   }
   if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EIndFix(usage, motive, cas), scrut.spine));
   return impossible(`vindfix: ${scrut.tag}`);
+};
+export const vhelloworld = (scrut: Val): Val => {
+  if (scrut.tag === 'VWorldToken') {
+    if (typeof window === 'undefined') {
+      console.log('Hello, world!');
+    } else {
+      alert('Hello, world!');
+    }
+    return scrut;
+  }
+  if (scrut.tag === 'VNe') return VNe(scrut.head, Cons(EHelloWorld, scrut.spine));
+  return impossible(`vhelloworld: ${scrut.tag}`);
 };
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
@@ -131,7 +145,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'IndUnit')
     return vindunit(evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.cas, vs));
   if (t.tag === 'IndSigma')
-    return vindsigma(evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.cas, vs));
+    return vindsigma(t.usage, evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.cas, vs));
   if (t.tag === 'IndSum')
     return vindsum(t.usage, evaluate(t.motive, vs), evaluate(t.scrut, vs), evaluate(t.caseLeft, vs), evaluate(t.caseRight, vs));
   if (t.tag === 'World') return VWorld;
@@ -142,8 +156,9 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'UpdateWorld') {
     // updateWorld q A c ~> indSigma (\_. A) (c WorldToken) (\x y. x)
     const ty = evaluate(t.type, vs);
-    return vindsigma(VAbs(UsageRig.default, '_', VSigma(t.usage, '_', ty, _ => VWorld), _ => ty), vapp(evaluate(t.cont, vs), VWorldToken), VAbs(t.usage, 'x', ty, x => VAbs(UsageRig.one, 'w', VWorld, _ => x)));
+    return vindsigma(UsageRig.default, VAbs(UsageRig.default, '_', VSigma(t.usage, '_', ty, _ => VWorld), _ => ty), vapp(evaluate(t.cont, vs), VWorldToken), VAbs(t.usage, 'x', ty, x => VAbs(UsageRig.one, 'w', VWorld, _ => x)));
   }
+  if (t.tag === 'HelloWorld') return vhelloworld(evaluate(t.arg, vs));
   return t;
 };
 
@@ -155,9 +170,10 @@ const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
   if (e.tag === 'EApp') return App(t, quote(e.arg, k));
   if (e.tag === 'EIndVoid') return IndVoid(quote(e.motive, k), t);
   if (e.tag === 'EIndUnit') return IndUnit(quote(e.motive, k), t, quote(e.cas, k));
-  if (e.tag === 'EIndSigma') return IndSigma(quote(e.motive, k), t, quote(e.cas, k));
+  if (e.tag === 'EIndSigma') return IndSigma(e.usage, quote(e.motive, k), t, quote(e.cas, k));
   if (e.tag === 'EIndSum') return IndSum(e.usage, quote(e.motive, k), t, quote(e.caseLeft, k), quote(e.caseRight, k));
   if (e.tag === 'EIndFix') return IndFix(e.usage, quote(e.motive, k), t, quote(e.cas, k));
+  if (e.tag === 'EHelloWorld') return HelloWorld(t);
   return e;
 };
 export const quote = (v: Val, k: Ix): Term => {

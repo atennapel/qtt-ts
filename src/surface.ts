@@ -14,7 +14,7 @@ export type Term =
   Sigma | Pair | IndSigma |
   Sum | Inj | IndSum |
   Fix | Con | IndFix |
-  World | UpdateWorld |
+  World | UpdateWorld | HelloWorld |
   Hole;
 
 export interface Type { readonly tag: 'Type' }
@@ -43,8 +43,8 @@ export interface Sigma { readonly tag: 'Sigma'; readonly usage: Usage; readonly 
 export const Sigma = (usage: Usage, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', usage, name, type, body });
 export interface Pair { readonly tag: 'Pair'; readonly fst: Term; readonly snd: Term }
 export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
-export interface IndSigma { readonly tag: 'IndSigma'; readonly motive: Term; readonly scrut: Term, readonly cas: Term }
-export const IndSigma = (motive: Term, scrut: Term, cas: Term): IndSigma => ({ tag: 'IndSigma', motive, scrut, cas });
+export interface IndSigma { readonly tag: 'IndSigma'; readonly usage: Usage; readonly motive: Term; readonly scrut: Term, readonly cas: Term }
+export const IndSigma = (usage: Usage, motive: Term, scrut: Term, cas: Term): IndSigma => ({ tag: 'IndSigma', usage, motive, scrut, cas });
 export interface Sum { readonly tag: 'Sum'; readonly left: Term; readonly right: Term }
 export const Sum = (left: Term, right: Term): Sum => ({ tag: 'Sum', left, right });
 export interface Inj { readonly tag: 'Inj'; readonly which: 'Left' | 'Right'; readonly val: Term }
@@ -61,6 +61,8 @@ export interface World { readonly tag: 'World' }
 export const World: World = { tag: 'World' }
 export interface UpdateWorld { readonly tag: 'UpdateWorld'; readonly usage: Usage; readonly type: Term; readonly cont: Term }
 export const UpdateWorld = (usage: Usage, type: Term, cont: Term): UpdateWorld => ({ tag: 'UpdateWorld', usage, type, cont });
+export interface HelloWorld { readonly tag: 'HelloWorld'; readonly arg: Term }
+export const HelloWorld = (arg: Term): HelloWorld => ({ tag: 'HelloWorld', arg });
 
 export interface Hole { readonly tag: 'Hole'; readonly name: Name }
 export const Hole = (name: Name): Hole => ({ tag: 'Hole', name });
@@ -160,17 +162,18 @@ export const show = (t: Term): string => {
   if (t.tag === 'IndUnit')
     return `indUnit ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   if (t.tag === 'IndSum')
-    return `indSum ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
+    return `indSum ${t.usage === UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.caseLeft)} ${showS(t.caseRight)}`;
   if (t.tag === 'IndSigma')
-    return `indSigma ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+    return `indSigma ${t.usage === UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   if (t.tag === 'Fix')
     return `Fix ${showS(t.sig)}`;
   if (t.tag === 'Con')
     return `Con ${showS(t.val)}`;
   if (t.tag === 'IndFix')
-    return `indFix ${t.usage} ${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
+    return `indFix ${t.usage === UsageRig.default ? '' : `${t.usage} `}${showS(t.motive)} ${showS(t.scrut)} ${showS(t.cas)}`;
   if (t.tag === 'World') return 'World';
-  if (t.tag === 'UpdateWorld') return `updateWorld ${t.usage} ${showS(t.type)} ${showS(t.cont)}`;
+  if (t.tag === 'UpdateWorld') return `updateWorld ${t.usage === UsageRig.default ? '' : `${t.usage} `}${showS(t.type)} ${showS(t.cont)}`;
+  if (t.tag === 'HelloWorld') return `helloWorld ${showS(t.arg)}`;
   if (t.tag === 'Hole') return `_${t.name}`;
   return t;
 };
@@ -203,7 +206,7 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Inj') return Inj(t.which, fromCore(t.val, ns));
   if (t.tag === 'IndVoid') return IndVoid(fromCore(t.motive, ns), fromCore(t.scrut, ns));
   if (t.tag === 'IndUnit') return IndUnit(fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
-  if (t.tag === 'IndSigma') return IndSigma(fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
+  if (t.tag === 'IndSigma') return IndSigma(t.usage, fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.cas, ns));
   if (t.tag === 'IndSum')
     return IndSum(t.usage, fromCore(t.motive, ns), fromCore(t.scrut, ns), fromCore(t.caseLeft, ns), fromCore(t.caseRight, ns));
   if (t.tag === 'Fix') return Fix(fromCore(t.sig, ns));
@@ -212,6 +215,7 @@ export const fromCore = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'World') return World;
   if (t.tag === 'WorldToken') return Var('WorldToken');
   if (t.tag === 'UpdateWorld') return UpdateWorld(t.usage, fromCore(t.type, ns), fromCore(t.cont, ns));
+  if (t.tag === 'HelloWorld') return HelloWorld(fromCore(t.arg, ns));
   return t;
 };
 

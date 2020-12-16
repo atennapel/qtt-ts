@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid, IndUnit, IndSum, IndSigma, Con, Fix, IndFix, Hole, World, UpdateWorld } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Type, show, Unit, UnitType, Sigma, Pair, Void, Sum, Inj, IndVoid, IndUnit, IndSum, IndSigma, Con, Fix, IndFix, Hole, World, UpdateWorld, HelloWorld } from './surface';
 import { Name } from './names';
 import { log } from './config';
 import { Usage, UsageRig } from './usage';
@@ -321,11 +321,14 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
     return IndUnit(motive, scrut, cas);
   }
   if (isName(ts[0], 'indSigma')) {
-    if (ts.length !== 4) return serr(`indSigma expects exactly 3 arguments`);
-    const [motive] = expr(ts[1], fromRepl);
-    const [scrut] = expr(ts[2], fromRepl);
-    const [cas] = expr(ts[3], fromRepl);
-    return IndSigma(motive, scrut, cas);
+    let j = 1;
+    let u = usage(ts[1]);
+    if (u) { j = 2 } else { u = UsageRig.default }
+    if (ts.length !== 3 + j) return serr(`indSigma expects exactly 3 arguments`);
+    const [motive] = expr(ts[j], fromRepl);
+    const [scrut] = expr(ts[j + 1], fromRepl);
+    const [cas] = expr(ts[j + 2], fromRepl);
+    return IndSigma(u, motive, scrut, cas);
   }
   if (isName(ts[0], 'indSum')) {
     let j = 1;
@@ -360,10 +363,15 @@ const exprs = (ts: Token[], br: BracketO, fromRepl: boolean): Term => {
     let j = 1;
     let u = usage(ts[1]);
     if (u) { j = 2 } else { u = UsageRig.default }
-    if (ts.length !== 3 + j) return serr(`updateWorld expects exactly 2 arguments`);
+    if (ts.length !== 2 + j) return serr(`updateWorld expects exactly 2 arguments`);
     const [type] = expr(ts[j], fromRepl);
     const [cont] = expr(ts[j + 1], fromRepl);
     return UpdateWorld(u, type, cont);
+  }
+  if (isName(ts[0], 'helloWorld')) {
+    if (ts.length !== 2) return serr(`helloWorld expects one argument`);
+    const [arg] = expr(ts[1], fromRepl);
+    return HelloWorld(arg);
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {

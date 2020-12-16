@@ -134,12 +134,22 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     return [vapp(motive, evaluate(tm.scrut, local.vs)), addUses(u1, u2)];
   }
   if (tm.tag === 'IndSigma') {
+    /*
+      1 <= q
+      G |- p : (u x : A) ** B
+      G |- P : ((u x : A) ** B x) -> Type
+      G |- k : (q * u x : A) -> (q y : B x) -> P (x, y)
+      ---------------------------------------------
+      q * G |- indSigma q P p k : P p
+    */
+    if (!UsageRig.sub(UsageRig.one, tm.usage))
+      return terr(`usage must be 1 <= q in sigma induction ${show(tm)}: ${tm.usage}`)
     const [sigma, u1] = synth(local, tm.scrut);
     if (sigma.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, sigma)}`);
     check(local, tm.motive, VPi(UsageRig.default, '_', sigma, _ => VType));
     const motive = evaluate(tm.motive, local.vs);
-    const u2 = check(local, tm.cas, VPi(sigma.usage, 'x', sigma.type, x => VPi(UsageRig.one, 'y', vinst(sigma, x), y => vapp(motive, VPair(x, y, sigma)))));
-    return [vapp(motive, evaluate(tm.scrut, local.vs)), addUses(u1, u2)];
+    const u2 = check(local, tm.cas, VPi(UsageRig.multiply(tm.usage, sigma.usage), 'x', sigma.type, x => VPi(tm.usage, 'y', vinst(sigma, x), y => vapp(motive, VPair(x, y, sigma)))));
+    return [vapp(motive, evaluate(tm.scrut, local.vs)), multiplyUses(tm.usage, addUses(u1, u2))];
   }
   if (tm.tag === 'IndSum') {
     if (!UsageRig.sub(UsageRig.one, tm.usage))
@@ -186,6 +196,10 @@ const synth = (local: Local, tm: Term): [Val, Uses] => {
     const ty = evaluate(tm.type, local.vs);
     const u = check(local, tm.cont, VPi(UsageRig.one, '_', VWorld, _ => VSigma(tm.usage, '_', ty, _ => VWorld)));
     return [ty, multiplyUses(tm.usage, u)];
+  }
+  if (tm.tag === 'HelloWorld') {
+    const u = check(local, tm.arg, VWorld);
+    return [VWorld, u];
   }
   return tm;
 };

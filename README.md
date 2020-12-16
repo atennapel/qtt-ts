@@ -33,9 +33,6 @@ Currently done:
 - fixpoint type
 - a "world" token to play around with
 
-Not yet done:
-- erase to untyped lambda calculus
-
 Will not be implemented:
 - implicit arguments/unification
 - instance arguments
@@ -63,7 +60,7 @@ t ::=
 
   (u x : t) ** t      -- sigma/pair type
   (t, t : t)          -- pair
-  indSigma t t t      -- sigma induction
+  indSigma u t t t    -- sigma induction
 
   t ++ t              -- sum type
   Left t t t          -- left injection
@@ -77,4 +74,5 @@ t ::=
   World               -- the world
   WorldToken          -- token to represent the world
   updateWorld u t t   -- update the world
+  helloWorld t        -- print hello world
 ```
